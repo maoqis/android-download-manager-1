@@ -337,24 +337,27 @@ public class DownloadManager extends Thread {
             }
 
             @Override
-            public void errorDownload(DownloadTask task, int error) {
+            public void errorDownload(DownloadTask task, Throwable error) {
 
-                Toast.makeText(mContext,
-                        "Error: " + error + "  " + DownloadTask.getErrorInfo(error),
-                        Toast.LENGTH_LONG).show();
-
-                Intent errorIntent = new Intent("com.yyxu.download.activities.DownloadListActivity");
-                errorIntent.putExtra(MyIntents.TYPE, MyIntents.Types.ERROR);
-                errorIntent.putExtra(MyIntents.ERROR_CODE, error);
-                errorIntent.putExtra(MyIntents.ERROR_INFO, DownloadTask.getErrorInfo(error));
-                errorIntent.putExtra(MyIntents.URL, task.getUrl());
-                mContext.sendBroadcast(errorIntent);
-
-                if (error != DownloadTask.ERROR_UNKOWN_HOST
-                        && error != DownloadTask.ERROR_BLOCK_INTERNET
-                        && error != DownloadTask.ERROR_TIME_OUT) {
-                    completeTask(task);
+                if (error != null) {
+                    Toast.makeText(mContext, "Error: " + error.getMessage(), Toast.LENGTH_LONG)
+                            .show();
                 }
+
+                // Intent errorIntent = new
+                // Intent("com.yyxu.download.activities.DownloadListActivity");
+                // errorIntent.putExtra(MyIntents.TYPE, MyIntents.Types.ERROR);
+                // errorIntent.putExtra(MyIntents.ERROR_CODE, error);
+                // errorIntent.putExtra(MyIntents.ERROR_INFO,
+                // DownloadTask.getErrorInfo(error));
+                // errorIntent.putExtra(MyIntents.URL, task.getUrl());
+                // mContext.sendBroadcast(errorIntent);
+                //
+                // if (error != DownloadTask.ERROR_UNKOWN_HOST
+                // && error != DownloadTask.ERROR_BLOCK_INTERNET
+                // && error != DownloadTask.ERROR_TIME_OUT) {
+                // completeTask(task);
+                // }
             }
         };
         return new DownloadTask(mContext, url, StorageUtils.FILE_ROOT, taskListener);

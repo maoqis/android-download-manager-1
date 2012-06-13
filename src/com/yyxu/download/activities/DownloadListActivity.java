@@ -2,7 +2,6 @@
 package com.yyxu.download.activities;
 
 import com.yyxu.download.R;
-import com.yyxu.download.services.DownloadTask;
 import com.yyxu.download.services.TrafficCounterService;
 import com.yyxu.download.utils.MyIntents;
 import com.yyxu.download.utils.StorageUtils;
@@ -190,9 +189,10 @@ public class DownloadListActivity extends Activity {
                         break;
                     case MyIntents.Types.ERROR:
                         url = intent.getStringExtra(MyIntents.URL);
-                        int errorCode = intent.getIntExtra(MyIntents.ERROR_CODE,
-                                DownloadTask.ERROR_UNKONW);
-                        handleError(url, errorCode);
+                        // int errorCode =
+                        // intent.getIntExtra(MyIntents.ERROR_CODE,
+                        // DownloadTask.ERROR_UNKONW);
+                        // handleError(url, errorCode);
                         break;
                     default:
                         break;
@@ -200,37 +200,38 @@ public class DownloadListActivity extends Activity {
             }
         }
 
-        private void handleError(String url, int code) {
+        // private void handleError(String url, int code) {
+        //
+        // switch (code) {
+        // case DownloadTask.ERROR_BLOCK_INTERNET:
+        // case DownloadTask.ERROR_UNKOWN_HOST:
+        // showAlert("错误", "无法连接网络");
+        // View taskListItem = downloadList.findViewWithTag(url);
+        // ViewHolder viewHolder = new ViewHolder(taskListItem);
+        // viewHolder.onPause();
+        // break;
+        // case DownloadTask.ERROR_FILE_EXIST:
+        // showAlert("", "文件已经存在，取消下载");
+        // break;
+        // case DownloadTask.ERROR_SD_NO_MEMORY:
+        // showAlert("错误", "存储卡空间不足");
+        // break;
+        // case DownloadTask.ERROR_UNKONW:
+        //
+        // break;
+        // case DownloadTask.ERROR_TIME_OUT:
+        // showAlert("错误", "连接超时，请检查网络后重试");
+        // View timeoutItem = downloadList.findViewWithTag(url);
+        // ViewHolder timeoutHolder = new ViewHolder(timeoutItem);
+        // timeoutHolder.onPause();
+        // break;
+        //
+        // default:
+        // break;
+        // }
+        // }
 
-            switch (code) {
-                case DownloadTask.ERROR_BLOCK_INTERNET:
-                case DownloadTask.ERROR_UNKOWN_HOST:
-                    showAlert("错误", "无法连接网络");
-                    View taskListItem = downloadList.findViewWithTag(url);
-                    ViewHolder viewHolder = new ViewHolder(taskListItem);
-                    viewHolder.onPause();
-                    break;
-                case DownloadTask.ERROR_FILE_EXIST:
-                    showAlert("", "文件已经存在，取消下载");
-                    break;
-                case DownloadTask.ERROR_SD_NO_MEMORY:
-                    showAlert("错误", "存储卡空间不足");
-                    break;
-                case DownloadTask.ERROR_UNKONW:
-
-                    break;
-                case DownloadTask.ERROR_TIME_OUT:
-                    showAlert("错误", "连接超时，请检查网络后重试");
-                    View timeoutItem = downloadList.findViewWithTag(url);
-                    ViewHolder timeoutHolder = new ViewHolder(timeoutItem);
-                    timeoutHolder.onPause();
-                    break;
-
-                default:
-                    break;
-            }
-        }
-
+        @SuppressWarnings("unused")
         private void showAlert(String title, String msg) {
 
             new AlertDialog.Builder(DownloadListActivity.this).setTitle(title).setMessage(msg)
