@@ -1,13 +1,12 @@
 
 package com.yyxu.download.services;
 
-import com.yyxu.download.utils.MyIntents;
-
 import android.app.Service;
 import android.content.Intent;
 import android.os.IBinder;
-import android.os.RemoteException;
 import android.text.TextUtils;
+
+import com.yyxu.download.utils.MyIntents;
 
 public class DownloadService extends Service {
 
@@ -15,8 +14,7 @@ public class DownloadService extends Service {
 
     @Override
     public IBinder onBind(Intent intent) {
-
-        return new DownloadServiceImpl();
+        return null;
     }
 
     @Override
@@ -30,10 +28,6 @@ public class DownloadService extends Service {
     public void onStart(Intent intent, int startId) {
 
         super.onStart(intent, startId);
-
-        // if (mDownloadManager == null) {
-        // mDownloadManager = new DownloadManager(this);
-        // }
 
         if (intent.getAction().equals("com.yyxu.download.services.IDownloadService")) {
             int type = intent.getIntExtra(MyIntents.TYPE, -1);
@@ -79,37 +73,6 @@ public class DownloadService extends Service {
                 default:
                     break;
             }
-        }
-
-    }
-
-    private class DownloadServiceImpl extends IDownloadService.Stub {
-
-        @Override
-        public void startManage() throws RemoteException {
-
-            mDownloadManager.startManage();
-        }
-
-        @Override
-        public void addTask(String url) throws RemoteException {
-
-            mDownloadManager.addTask(url);
-        }
-
-        @Override
-        public void pauseTask(String url) throws RemoteException {
-
-        }
-
-        @Override
-        public void deleteTask(String url) throws RemoteException {
-
-        }
-
-        @Override
-        public void continueTask(String url) throws RemoteException {
-
         }
 
     }

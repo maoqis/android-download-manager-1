@@ -1,13 +1,7 @@
 
 package com.yyxu.download.activities;
 
-import com.yyxu.download.R;
-import com.yyxu.download.services.TrafficCounterService;
-import com.yyxu.download.utils.MyIntents;
-import com.yyxu.download.utils.StorageUtils;
-import com.yyxu.download.utils.Utils;
-import com.yyxu.download.widgets.DownloadListAdapter;
-import com.yyxu.download.widgets.ViewHolder;
+import java.io.IOException;
 
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -23,7 +17,12 @@ import android.widget.Button;
 import android.widget.ListView;
 import android.widget.Toast;
 
-import java.io.IOException;
+import com.yyxu.download.R;
+import com.yyxu.download.utils.MyIntents;
+import com.yyxu.download.utils.StorageUtils;
+import com.yyxu.download.utils.Utils;
+import com.yyxu.download.widgets.DownloadListAdapter;
+import com.yyxu.download.widgets.ViewHolder;
 
 public class DownloadListActivity extends Activity {
 
@@ -112,20 +111,6 @@ public class DownloadListActivity extends Activity {
                 // stopService(trafficIntent);
             }
         });
-
-        trafficButton.setOnClickListener(new View.OnClickListener() {
-
-            @Override
-            public void onClick(View v) {
-
-                Intent intent = new Intent(DownloadListActivity.this, TrafficStatActivity.class);
-                startActivity(intent);
-            }
-        });
-
-        // downloadManager.startManage();
-        Intent trafficIntent = new Intent(this, TrafficCounterService.class);
-        startService(trafficIntent);
 
         Intent downloadIntent = new Intent("com.yyxu.download.services.IDownloadService");
         downloadIntent.putExtra(MyIntents.TYPE, MyIntents.Types.START);

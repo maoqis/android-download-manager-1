@@ -21,16 +21,21 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".activities.TrafficStatActivity" >
-        </activity>
 
-        <service android:name=".services.TrafficCounterService" >
-        </service>
         <service android:name=".services.DownloadService" >
             <intent-filter >
                 <action android:name="com.yyxu.download.services.IDownloadService" />
             </intent-filter>
         </service>
-    </application>
+
+        <provider
+            android:exported="false"
+            android:name=".model.QipaoxianProvider"
+            android:authorities="com.qipaoxian.client"
+            android:multiprocess="false"
+            android:syncable="false" >
+        </provider>
+        
+        </application>
 
 </manifest>

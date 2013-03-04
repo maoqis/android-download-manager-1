@@ -1,21 +1,23 @@
 
 package com.yyxu.download.services;
 
-import com.yyxu.download.utils.ConfigUtils;
-import com.yyxu.download.utils.MyIntents;
-import com.yyxu.download.utils.NetworkUtils;
-import com.yyxu.download.utils.StorageUtils;
-
-import android.content.Context;
-import android.content.Intent;
-import android.widget.Toast;
-
 import java.io.File;
 import java.net.MalformedURLException;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
+
+import android.content.Context;
+import android.content.Intent;
+import android.widget.Toast;
+
+import com.yyxu.download.model.DownloadedItem;
+import com.yyxu.download.model.ModelUtil;
+import com.yyxu.download.utils.ConfigUtils;
+import com.yyxu.download.utils.MyIntents;
+import com.yyxu.download.utils.NetworkUtils;
+import com.yyxu.download.utils.StorageUtils;
 
 public class DownloadManager extends Thread {
 
@@ -179,6 +181,7 @@ public class DownloadManager extends Thread {
         return getQueueTaskCount() + getDownloadingTaskCount() + getPausingTaskCount();
     }
 
+    // M:
     public void checkUncompleteTasks() {
 
         List<String> urlList = ConfigUtils.getURLArray(mContext);
@@ -289,7 +292,7 @@ public class DownloadManager extends Thread {
     public synchronized void completeTask(DownloadTask task) {
 
         if (mDownloadingTasks.contains(task)) {
-            ConfigUtils.clearURL(mContext, mDownloadingTasks.indexOf(task));
+            ConfigUtils.clearURL(mContext, task.getUrl());
             mDownloadingTasks.remove(task);
 
             // notify list changed
@@ -327,13 +330,18 @@ public class DownloadManager extends Thread {
             @Override
             public void preDownload(DownloadTask task) {
 
-                ConfigUtils.storeURL(mContext, mDownloadingTasks.indexOf(task), task.getUrl());
+                ConfigUtils.storeURL(mContext, task);
             }
 
             @Override
             public void finishDownload(DownloadTask task) {
 
                 completeTask(task);
+                ModelUtil.addOrUpdateDownloaded(
+                        mContext,
+                        new DownloadedItem("default_name", task.getUrl(), "default_thumb",
+                                "default_path", (int) task.getTotalSize(), System
+                                        .currentTimeMillis()));
             }
 
             @Override
@@ -344,20 +352,6 @@ public class DownloadManager extends Thread {
                             .show();
                 }
 
-                // Intent errorIntent = new
-                // Intent("com.yyxu.download.activities.DownloadListActivity");
-                // errorIntent.putExtra(MyIntents.TYPE, MyIntents.Types.ERROR);
-                // errorIntent.putExtra(MyIntents.ERROR_CODE, error);
-                // errorIntent.putExtra(MyIntents.ERROR_INFO,
-                // DownloadTask.getErrorInfo(error));
-                // errorIntent.putExtra(MyIntents.URL, task.getUrl());
-                // mContext.sendBroadcast(errorIntent);
-                //
-                // if (error != DownloadTask.ERROR_UNKOWN_HOST
-                // && error != DownloadTask.ERROR_BLOCK_INTERNET
-                // && error != DownloadTask.ERROR_TIME_OUT) {
-                // completeTask(task);
-                // }
             }
         };
         return new DownloadTask(mContext, url, StorageUtils.FILE_ROOT, taskListener);
