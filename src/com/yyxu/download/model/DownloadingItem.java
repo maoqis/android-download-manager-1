@@ -84,4 +84,15 @@ public class DownloadingItem extends BaseDownloadItem {
     public void updateState(int state) {
         mState = state;
     }
+
+    @Override
+    public String toString() {
+        StringBuilder builder = new StringBuilder("DownloadingItem[name=");
+        builder.append(getName()).append(" url=").append(getUrl()).append(" thumbUrl=")
+                .append(getThumbUrl()).append(" savePaht=").append(getSavePath())
+                .append(" fileLength=").append(getFileLength()).append(" startTime=")
+                .append(getStartTime()).append(" completedLength=").append(getCompletedLength())
+                .append(" state=").append(getState()).append("]");
+        return builder.toString();
+    }
 }

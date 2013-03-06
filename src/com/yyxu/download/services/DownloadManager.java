@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import android.content.Context;
+import android.util.Log;
 import android.widget.Toast;
 
 import com.yyxu.download.model.DatabaseModel.Downloading;
@@ -16,6 +17,10 @@ import com.yyxu.download.model.VideoItem;
 import com.yyxu.download.utils.StorageUtils;
 
 public class DownloadManager {
+
+    private static final boolean DEBUG = true;
+
+    private static final String TAG = "DownloadManager";
 
     public static final String DOWNLOAD_MANAGER = "download_qpx";
 
@@ -129,6 +134,9 @@ public class DownloadManager {
     }
 
     public void addDownload(VideoItem video) {
+        if (DEBUG) {
+            Log.i(TAG, "addDownload: " + video);
+        }
 
         if (!StorageUtils.isSDCardPresent()) {
             Toast.makeText(mContext, "未发现SD卡", Toast.LENGTH_LONG).show();
@@ -169,6 +177,7 @@ public class DownloadManager {
                 if (state == DownloadingItem.STATE_DOWNLOADING) {
                     // Start a download task.
                     DownloadTask task = createDownloadTask(result);
+                    mDownloadingTasks.add(task);
                     task.execute((Void) null);
                     mDownloadingItems.add(result);
                 } else { // Pending.
@@ -181,6 +190,10 @@ public class DownloadManager {
     }
 
     public synchronized void pauseDownload(DownloadingItem item) {
+        if (DEBUG) {
+            Log.i(TAG, "pauseDownload: " + item);
+        }
+
         // Can only pause downloading or pending download.
         if ((item.getState() & (DownloadingItem.STATE_DOWNLOADING | DownloadingItem.STATE_PENDING)) == 0) {
             throw new IllegalStateException(
@@ -209,6 +222,10 @@ public class DownloadManager {
     }
 
     public synchronized void resumeDownload(DownloadingItem item) {
+        if (DEBUG) {
+            Log.i(TAG, "resumeDownload: " + item);
+        }
+
         // Can only resume paused download.
         if (item.getState() != DownloadingItem.STATE_PAUSED) {
             throw new IllegalStateException(
@@ -223,6 +240,7 @@ public class DownloadManager {
 
             // Start a download task.
             DownloadTask task = createDownloadTask(item);
+            mDownloadingTasks.add(task);
             task.execute((Void)null);
         } else { // Pending.
             item.updateState(DownloadingItem.STATE_PENDING);
@@ -234,6 +252,10 @@ public class DownloadManager {
     }
 
     public synchronized void deleteDownload(DownloadingItem item) {
+        if (DEBUG) {
+            Log.i(TAG, "deleteDownload: " + item);
+        }
+
         // Cancel task if downloading, and remove.
         if (item.getState() == DownloadingItem.STATE_DOWNLOADING) {
             DownloadTask task = findDownloadTask(item.getUrl());
@@ -263,6 +285,10 @@ public class DownloadManager {
     }
 
     public synchronized void pauseAllDownloads() {
+        if (DEBUG) {
+            Log.i(TAG, "pauseAllDownloads.");
+        }
+
         // Cancel all downloading task and clear tasks list.
         for (DownloadTask task : mDownloadingTasks) {
             task.onCancelled();
@@ -291,6 +317,10 @@ public class DownloadManager {
     }
 
     public synchronized void onFinishDownload(DownloadingItem item) {
+        if (DEBUG) {
+            Log.i(TAG, "onFinishDownload: " + item);
+        }
+
         // Remove task from list.
         DownloadTask task = findDownloadTask(item.getUrl());
         if (task != null) {

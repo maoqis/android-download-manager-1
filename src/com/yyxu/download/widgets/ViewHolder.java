@@ -44,6 +44,7 @@ public class ViewHolder {
         titleText.setText(item.getName());
         if (progress != null) {
             speedText.setText(String.valueOf(progress.averageSpeed));
+            progressBar.setMax(item.getFileLength());
             progressBar.setProgress((int) progress.completedLength);
         } else {
             speedText.setText("0/0"); // TODO

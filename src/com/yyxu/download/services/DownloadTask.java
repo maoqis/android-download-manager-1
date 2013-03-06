@@ -20,6 +20,7 @@ import com.yyxu.download.error.FileAlreadyExistException;
 import com.yyxu.download.error.NoMemoryException;
 import com.yyxu.download.http.AndroidHttpClient;
 import com.yyxu.download.model.DownloadingItem;
+import com.yyxu.download.model.ModelUtil;
 import com.yyxu.download.utils.NetworkUtils;
 
 public class DownloadTask extends AsyncTask<Void, Integer, Long> {
@@ -256,7 +257,7 @@ public class DownloadTask extends AsyncTask<Void, Integer, Long> {
 
         try {
 
-            out.seek(out.length());
+            out.seek(mDownloadingItem.getCompletedLength());
 
             while (!interrupt) {
                 n = in.read(buffer, 0, BUFFER_SIZE);
@@ -264,6 +265,7 @@ public class DownloadTask extends AsyncTask<Void, Integer, Long> {
                     break;
                 }
                 out.write(buffer, 0, n);
+                ModelUtil.updataDownloading(mContext, mDownloadingItem.getCompletedLength(), mDownloadingItem.getUrl());
                 count += n;
 
                 /*
