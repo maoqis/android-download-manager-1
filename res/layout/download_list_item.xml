@@ -35,18 +35,27 @@
         android:orientation="vertical" >
 
         <Button
-            android:id="@+id/btn_pause"
+            android:id="@+id/btn_paused"
             android:layout_width="wrap_content"
             android:layout_height="40dip"
-            android:text="Pause" />
+            android:text="Paused"
+            android:visibility="gone" />
         
         <Button
-            android:id="@+id/btn_continue"
+            android:id="@+id/btn_downloading"
             android:layout_width="wrap_content"
             android:layout_height="40dip"
-            android:text="Contin"
+            android:text="Downloading"
             android:visibility="gone" />
 
+        
+        <Button
+            android:id="@+id/btn_pending"
+            android:layout_width="wrap_content"
+            android:layout_height="40dip"
+            android:text="Pending"
+            android:visibility="gone" />
+        
         <Button
             android:id="@+id/btn_delete"
             android:layout_width="wrap_content"

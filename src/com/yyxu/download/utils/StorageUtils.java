@@ -43,6 +43,7 @@ public class StorageUtils {
             long avaliableSize = ((long) stat.getAvailableBlocks() * (long) stat.getBlockSize());
             return avaliableSize;
         } catch (RuntimeException ex) {
+            ex.printStackTrace();
             return 0;
         }
     }

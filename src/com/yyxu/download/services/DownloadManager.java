@@ -2,75 +2,133 @@
 package com.yyxu.download.services;
 
 import java.io.File;
-import java.net.MalformedURLException;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Queue;
 
 import android.content.Context;
-import android.content.Intent;
 import android.widget.Toast;
 
+import com.yyxu.download.model.DatabaseModel.Downloading;
 import com.yyxu.download.model.DownloadedItem;
+import com.yyxu.download.model.DownloadingItem;
 import com.yyxu.download.model.ModelUtil;
-import com.yyxu.download.utils.ConfigUtils;
-import com.yyxu.download.utils.MyIntents;
-import com.yyxu.download.utils.NetworkUtils;
+import com.yyxu.download.model.VideoItem;
 import com.yyxu.download.utils.StorageUtils;
 
-public class DownloadManager extends Thread {
+public class DownloadManager {
 
-    private static final int MAX_TASK_COUNT = 100;
-    private static final int MAX_DOWNLOAD_THREAD_COUNT = 3;
+    public static final String DOWNLOAD_MANAGER = "download_qpx";
+
+    private static final int MAX_DOWNLOADING = 3;
+
+    private static final int MAX_DOWNLOAD = 4;
 
     private Context mContext;
 
-    private TaskQueue mTaskQueue;
+    private List<OnDownloadingChanged> mListeners;
+
     private List<DownloadTask> mDownloadingTasks;
-    private List<DownloadTask> mPausingTasks;
+
+    private List<DownloadingItem> mAllItems;
+    private List<DownloadingItem> mDownloadingItems;
+    private List<DownloadingItem> mPausedItems;
+    private List<DownloadingItem> mPendingItems;
 
     private Boolean isRunning = false;
 
     public DownloadManager(Context context) {
-
+        super();
         mContext = context;
-        mTaskQueue = new TaskQueue();
+
+        mListeners = new ArrayList<DownloadManager.OnDownloadingChanged>();
+
+        mAllItems = new ArrayList<DownloadingItem>();
+        mDownloadingItems = new ArrayList<DownloadingItem>();
+        mPausedItems = new ArrayList<DownloadingItem>();
+        mPendingItems = new ArrayList<DownloadingItem>();
+
+        // Load all downloadings here.
+        mAllItems = ModelUtil.loadDownloadings(mContext, Downloading.START_TIME, true);
+        for (DownloadingItem item : mAllItems) {
+            switch (item.getState()) {
+                case DownloadingItem.STATE_DOWNLOADING:
+                    mDownloadingItems.add(item);
+                    break;
+                case DownloadingItem.STATE_PAUSED:
+                    mPausedItems.add(item);
+                    break;
+                case DownloadingItem.STATE_PENDING:
+                    mPendingItems.add(item);
+                    break;
+            }
+        }
+
         mDownloadingTasks = new ArrayList<DownloadTask>();
-        mPausingTasks = new ArrayList<DownloadTask>();
     }
 
-    public void startManage() {
-
+    public void start() {
         isRunning = true;
-        this.start();
-        checkUncompleteTasks();
+
+        // Init download TODO
     }
 
-    public void close() {
-
+    public void stop() {
         isRunning = false;
-        pauseAllTask();
-        this.stop();
+        pauseAllDownloads();
     }
 
-    public boolean isRunning() {
-
-        return isRunning;
-    }
-
-    @Override
-    public void run() {
-
-        super.run();
-        while (isRunning) {
-            DownloadTask task = mTaskQueue.poll();
-            mDownloadingTasks.add(task);
-            task.execute();
+    public void registerDownloadChangedListener(OnDownloadingChanged listener) {
+        if (!mListeners.contains(listener)) {
+            mListeners.add(listener);
         }
     }
 
-    public void addTask(String url) {
+    public void unregisterDownloadChangedListener(OnDownloadingChanged listener) {
+        if (mListeners.contains(listener)) {
+            mListeners.remove(listener);
+        }
+    }
+
+    public void notifyDownloadAdded(DownloadingItem download) {
+        for (OnDownloadingChanged listener : mListeners) {
+            listener.onDownloadingAdded(download);
+        }
+    }
+
+    public void notifyDownloadStateChanged(DownloadingItem download) {
+        for (OnDownloadingChanged listener : mListeners) {
+            listener.onDownloadingStateChanged(download);
+        }
+    }
+
+    public void notifyDownloadsStateChanged() {
+        for (OnDownloadingChanged listener : mListeners) {
+            listener.onDownloadingsStateChanged();
+        }
+    }
+
+    public void notifyDownloadDeleted(DownloadingItem download) {
+        for (OnDownloadingChanged listener : mListeners) {
+            listener.onDownloadingDeleted(download);
+        }
+    }
+
+    public void notifyDownloadProgressUpdate(DownloadingItem download,
+            DownloadingProgressData progress) {
+        for (OnDownloadingChanged listener : mListeners) {
+            listener.onDownloadingProgressUpdate(download, progress);
+        }
+    }
+
+    public boolean isRunning() {
+        return isRunning;
+    }
+
+    public List<DownloadingItem> getAllDownloads() {
+        return mAllItems;
+    }
+
+    public void addDownload(VideoItem video) {
 
         if (!StorageUtils.isSDCardPresent()) {
             Toast.makeText(mContext, "未发现SD卡", Toast.LENGTH_LONG).show();
@@ -82,336 +140,229 @@ public class DownloadManager extends Thread {
             return;
         }
 
-        if (getTotalTaskCount() >= MAX_TASK_COUNT) {
-            Toast.makeText(mContext, "任务列表已满", Toast.LENGTH_LONG).show();
+        if (mAllItems.size() >= MAX_DOWNLOAD) {
+            Toast.makeText(mContext, "已达最大下载数", Toast.LENGTH_LONG).show();
             return;
         }
 
-        try {
-            addTask(newDownloadTask(url));
-        } catch (MalformedURLException e) {
-            e.printStackTrace();
-        }
-
-    }
-
-    private void addTask(DownloadTask task) {
-
-        broadcastAddTask(task.getUrl());
-
-        mTaskQueue.offer(task);
-
-        if (!this.isAlive()) {
-            this.startManage();
-        }
-    }
-
-    private void broadcastAddTask(String url) {
-
-        broadcastAddTask(url, false);
-    }
-
-    private void broadcastAddTask(String url, boolean isInterrupt) {
-
-        Intent nofityIntent = new Intent("com.yyxu.download.activities.DownloadListActivity");
-        nofityIntent.putExtra(MyIntents.TYPE, MyIntents.Types.ADD);
-        nofityIntent.putExtra(MyIntents.URL, url);
-        nofityIntent.putExtra(MyIntents.IS_PAUSED, isInterrupt);
-        mContext.sendBroadcast(nofityIntent);
-    }
-
-    public void reBroadcastAddAllTask() {
-
-        DownloadTask task;
-        for (int i = 0; i < mDownloadingTasks.size(); i++) {
-            task = mDownloadingTasks.get(i);
-            broadcastAddTask(task.getUrl(), task.isInterrupt());
-        }
-        for (int i = 0; i < mTaskQueue.size(); i++) {
-            task = mTaskQueue.get(i);
-            broadcastAddTask(task.getUrl());
-        }
-        for (int i = 0; i < mPausingTasks.size(); i++) {
-            task = mPausingTasks.get(i);
-            broadcastAddTask(task.getUrl());
-        }
-    }
-
-    public boolean hasTask(String url) {
-
-        DownloadTask task;
-        for (int i = 0; i < mDownloadingTasks.size(); i++) {
-            task = mDownloadingTasks.get(i);
-            if (task.getUrl().equals(url)) {
-                return true;
+        new CreateLoaclFileTask(new CreateLoaclFileTask.Callback() {
+            
+            @Override
+            public void onError(String errorMsg) {
+                Toast.makeText(mContext, errorMsg, Toast.LENGTH_SHORT).show();
             }
-        }
-        for (int i = 0; i < mTaskQueue.size(); i++) {
-            task = mTaskQueue.get(i);
-        }
-        return false;
-    }
+            
+            @Override
+            public void onDone(DownloadingItem result) {
+                int state;
+                if (mDownloadingItems.size() < MAX_DOWNLOADING) {
+                    state = DownloadingItem.STATE_DOWNLOADING;
+                } else {
+                    state = DownloadingItem.STATE_PENDING;
+                }
+                result.updateState(state);
 
-    public DownloadTask getTask(int position) {
+                // Add to DB.
+                ModelUtil.addOrUpdateDownloading(mContext, result);
+                mAllItems.add(result);
 
-        if (position >= mDownloadingTasks.size()) {
-            return mTaskQueue.get(position - mDownloadingTasks.size());
-        } else {
-            return mDownloadingTasks.get(position);
-        }
-    }
+                if (state == DownloadingItem.STATE_DOWNLOADING) {
+                    // Start a download task.
+                    DownloadTask task = createDownloadTask(result);
+                    task.execute((Void) null);
+                    mDownloadingItems.add(result);
+                } else { // Pending.
+                    mPendingItems.add(result);
+                }
 
-    public int getQueueTaskCount() {
-
-        return mTaskQueue.size();
-    }
-
-    public int getDownloadingTaskCount() {
-
-        return mDownloadingTasks.size();
-    }
-
-    public int getPausingTaskCount() {
-
-        return mPausingTasks.size();
-    }
-
-    public int getTotalTaskCount() {
-
-        return getQueueTaskCount() + getDownloadingTaskCount() + getPausingTaskCount();
-    }
-
-    // M:
-    public void checkUncompleteTasks() {
-
-        List<String> urlList = ConfigUtils.getURLArray(mContext);
-        if (urlList.size() >= 0) {
-            for (int i = 0; i < urlList.size(); i++) {
-                addTask(urlList.get(i));
+                notifyDownloadAdded(result);
             }
-        }
+        }).execute(video);
     }
 
-    public synchronized void pauseTask(String url) {
-
-        DownloadTask task;
-        for (int i = 0; i < mDownloadingTasks.size(); i++) {
-            task = mDownloadingTasks.get(i);
-            if (task != null && task.getUrl().equals(url)) {
-                pauseTask(task);
-            }
-        }
-    }
-
-    public synchronized void pauseAllTask() {
-
-        DownloadTask task;
-
-        for (int i = 0; i < mTaskQueue.size(); i++) {
-            task = mTaskQueue.get(i);
-            mTaskQueue.remove(task);
-            mPausingTasks.add(task);
+    public synchronized void pauseDownload(DownloadingItem item) {
+        // Can only pause downloading or pending download.
+        if ((item.getState() & (DownloadingItem.STATE_DOWNLOADING | DownloadingItem.STATE_PENDING)) == 0) {
+            throw new IllegalStateException(
+                    "Can not resume a download that is neither in downloading state nor in pending state. "
+                            + item);
         }
 
-        for (int i = 0; i < mDownloadingTasks.size(); i++) {
-            task = mDownloadingTasks.get(i);
+        // Cancel task if downloading, and remove from old.
+        if (item.getState() == DownloadingItem.STATE_DOWNLOADING) {
+            DownloadTask task = findDownloadTask(item.getUrl());
             if (task != null) {
-                pauseTask(task);
-            }
-        }
-    }
-
-    public synchronized void deleteTask(String url) {
-
-        DownloadTask task;
-        for (int i = 0; i < mDownloadingTasks.size(); i++) {
-            task = mDownloadingTasks.get(i);
-            if (task != null && task.getUrl().equals(url)) {
-                File file = new File(StorageUtils.FILE_ROOT
-                        + NetworkUtils.getFileNameFromUrl(task.getUrl()));
-                if (file.exists())
-                    file.delete();
-
                 task.onCancelled();
-                completeTask(task);
-                return;
-            }
-        }
-        for (int i = 0; i < mTaskQueue.size(); i++) {
-            task = mTaskQueue.get(i);
-            if (task != null && task.getUrl().equals(url)) {
-                mTaskQueue.remove(task);
-            }
-        }
-        for (int i = 0; i < mPausingTasks.size(); i++) {
-            task = mPausingTasks.get(i);
-            if (task != null && task.getUrl().equals(url)) {
-                mPausingTasks.remove(task);
-            }
-        }
-    }
-
-    public synchronized void continueTask(String url) {
-
-        DownloadTask task;
-        for (int i = 0; i < mPausingTasks.size(); i++) {
-            task = mPausingTasks.get(i);
-            if (task != null && task.getUrl().equals(url)) {
-                continueTask(task);
-            }
-
-        }
-    }
-
-    public synchronized void pauseTask(DownloadTask task) {
-
-        if (task != null) {
-            task.onCancelled();
-
-            // move to pausing list
-            String url = task.getUrl();
-            try {
                 mDownloadingTasks.remove(task);
-                task = newDownloadTask(url);
-                mPausingTasks.add(task);
-            } catch (MalformedURLException e) {
-                e.printStackTrace();
             }
-
+            mDownloadingItems.remove(item);
+        } else { // Pending.
+            mPendingItems.remove(item);
         }
+
+        // Update state and add to new.
+        item.updateState(DownloadingItem.STATE_PAUSED);
+        mPausedItems.add(item);
+        ModelUtil.updataDownloadingState(mContext, DownloadingItem.STATE_PAUSED, item.getUrl());
+
+        notifyDownloadStateChanged(item);
     }
 
-    public synchronized void continueTask(DownloadTask task) {
+    public synchronized void resumeDownload(DownloadingItem item) {
+        // Can only resume paused download.
+        if (item.getState() != DownloadingItem.STATE_PAUSED) {
+            throw new IllegalStateException(
+                    "Can not resume a download that is not in paused state. " + item);
+        }
 
+        mPausedItems.remove(item);
+        if (mDownloadingItems.size() < MAX_DOWNLOADING) {
+            item.updateState(DownloadingItem.STATE_DOWNLOADING);
+            mDownloadingItems.add(item);
+            ModelUtil.updataDownloadingState(mContext, DownloadingItem.STATE_DOWNLOADING, item.getUrl());
+
+            // Start a download task.
+            DownloadTask task = createDownloadTask(item);
+            task.execute((Void)null);
+        } else { // Pending.
+            item.updateState(DownloadingItem.STATE_PENDING);
+            mPendingItems.add(item);
+            ModelUtil.updataDownloadingState(mContext, DownloadingItem.STATE_PENDING, item.getUrl());
+        }
+
+        notifyDownloadStateChanged(item);
+    }
+
+    public synchronized void deleteDownload(DownloadingItem item) {
+        // Cancel task if downloading, and remove.
+        if (item.getState() == DownloadingItem.STATE_DOWNLOADING) {
+            DownloadTask task = findDownloadTask(item.getUrl());
+            if (task != null) {
+                task.onCancelled();
+                mDownloadingTasks.remove(task);
+            }
+            mDownloadingItems.remove(item);
+        } else if (item.getState() == DownloadingItem.STATE_PAUSED) {
+            mPausedItems.remove(item);
+        } else { // Pending.
+            mPendingItems.remove(item);
+        }
+
+        // Delete file.
+        // TODO Is too fast that task not canceled yet.
+        File file = new File(item.getSavePath());
+        if (file.exists()) {
+            file.delete();
+        }
+
+        // Totally remove this download.
+        mAllItems.remove(item);
+        ModelUtil.deleteDownloading(mContext, item.getUrl());
+
+        notifyDownloadDeleted(item);
+    }
+
+    public synchronized void pauseAllDownloads() {
+        // Cancel all downloading task and clear tasks list.
+        for (DownloadTask task : mDownloadingTasks) {
+            task.onCancelled();
+        }
+        mDownloadingTasks.clear();
+
+        // Update all downloading downloads to paused state,
+        // and transfer them to paused list.
+        for (DownloadingItem item : mDownloadingItems) {
+            item.updateState(DownloadingItem.STATE_PAUSED);
+        }
+        mPausedItems.addAll(mDownloadingItems);
+        mDownloadingItems.clear();
+        ModelUtil.updataAllDownloadingState(mContext, DownloadingItem.STATE_DOWNLOADING, DownloadingItem.STATE_PAUSED);
+
+        // Update all pending downloads to paused state,
+        // and transfer them to paused list.
+        for (DownloadingItem item : mPendingItems) {
+            item.updateState(DownloadingItem.STATE_PAUSED);
+        }
+        mPausedItems.addAll(mPendingItems);
+        mPendingItems.clear();
+        ModelUtil.updataAllDownloadingState(mContext, DownloadingItem.STATE_PENDING, DownloadingItem.STATE_PAUSED);
+
+        notifyDownloadsStateChanged();
+    }
+
+    public synchronized void onFinishDownload(DownloadingItem item) {
+        // Remove task from list.
+        DownloadTask task = findDownloadTask(item.getUrl());
         if (task != null) {
-            mPausingTasks.remove(task);
-            mTaskQueue.offer(task);
+            mDownloadingTasks.remove(task);
         }
+
+        // Remove download totally.
+        mDownloadingItems.remove(item);
+        mAllItems.remove(item);
+        ModelUtil.deleteDownloading(mContext, item.getUrl());
+
+        notifyDownloadDeleted(item);
+
+        // Add to DB as downloaded.
+        ModelUtil.addOrUpdateDownloaded(
+                mContext,
+                new DownloadedItem(item.getName(), item.getUrl(), item.getThumbUrl(), item
+                        .getSavePath(), (int) item.getFileLength(), System.currentTimeMillis()));
+
     }
 
-    public synchronized void completeTask(DownloadTask task) {
-
-        if (mDownloadingTasks.contains(task)) {
-            ConfigUtils.clearURL(mContext, task.getUrl());
-            mDownloadingTasks.remove(task);
-
-            // notify list changed
-            Intent nofityIntent = new Intent("com.yyxu.download.activities.DownloadListActivity");
-            nofityIntent.putExtra(MyIntents.TYPE, MyIntents.Types.COMPLETE);
-            nofityIntent.putExtra(MyIntents.URL, task.getUrl());
-            mContext.sendBroadcast(nofityIntent);
+    private DownloadTask findDownloadTask(String url) {
+        if (url == null) {
+            return null;
         }
+        for (DownloadTask task : mDownloadingTasks) {
+            if (url.equals(task.getUrl())) {
+                return task;
+            }
+        }
+        return null;
     }
 
     /**
      * Create a new download task with default config
-     * 
-     * @param url
-     * @return
-     * @throws MalformedURLException
      */
-    private DownloadTask newDownloadTask(String url) throws MalformedURLException {
+    private DownloadTask createDownloadTask(DownloadingItem item) {
 
-        DownloadTaskListener taskListener = new DownloadTaskListener() {
-
-            @Override
-            public void updateProcess(DownloadTask task) {
-
-                Intent updateIntent = new Intent(
-                        "com.yyxu.download.activities.DownloadListActivity");
-                updateIntent.putExtra(MyIntents.TYPE, MyIntents.Types.PROCESS);
-                updateIntent.putExtra(MyIntents.PROCESS_SPEED, task.getDownloadSpeed() + "kbps | "
-                        + task.getDownloadSize() + " / " + task.getTotalSize());
-                updateIntent.putExtra(MyIntents.PROCESS_PROGRESS, task.getDownloadPercent() + "");
-                updateIntent.putExtra(MyIntents.URL, task.getUrl());
-                mContext.sendBroadcast(updateIntent);
-            }
-
-            @Override
-            public void preDownload(DownloadTask task) {
-
-                ConfigUtils.storeURL(mContext, task);
-            }
-
-            @Override
-            public void finishDownload(DownloadTask task) {
-
-                completeTask(task);
-                ModelUtil.addOrUpdateDownloaded(
-                        mContext,
-                        new DownloadedItem("default_name", task.getUrl(), "default_thumb",
-                                "default_path", (int) task.getTotalSize(), System
-                                        .currentTimeMillis()));
-            }
-
-            @Override
-            public void errorDownload(DownloadTask task, Throwable error) {
-
-                if (error != null) {
-                    Toast.makeText(mContext, "Error: " + error.getMessage(), Toast.LENGTH_LONG)
-                            .show();
-                }
-
-            }
-        };
-        return new DownloadTask(mContext, url, StorageUtils.FILE_ROOT, taskListener);
+        DownloadTaskListener taskListener = new DefaultDownloadTaskListener();
+        return new DownloadTask(mContext, item, taskListener);
     }
 
-    /**
-     * A obstructed task queue
-     * 
-     * @author Yingyi Xu
-     */
-    private class TaskQueue {
-        private Queue<DownloadTask> taskQueue;
+    private class DefaultDownloadTaskListener implements DownloadTaskListener {
 
-        public TaskQueue() {
-
-            taskQueue = new LinkedList<DownloadTask>();
+        @Override
+        public void updateProcess(DownloadTask task, DownloadingProgressData progress) {
+            notifyDownloadProgressUpdate(task.getDownloadingItem(), progress);
         }
 
-        public void offer(DownloadTask task) {
-
-            taskQueue.offer(task);
+        @Override
+        public void preDownload(DownloadTask task) {
         }
 
-        public DownloadTask poll() {
+        @Override
+        public void finishDownload(DownloadTask task) {
+            onFinishDownload(task.getDownloadingItem());
+        }
 
-            DownloadTask task = null;
-            while (mDownloadingTasks.size() >= MAX_DOWNLOAD_THREAD_COUNT
-                    || (task = taskQueue.poll()) == null) {
-                try {
-                    Thread.sleep(1000); // sleep
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+        @Override
+        public void errorDownload(DownloadTask task, Throwable error) {
+            if (error != null) {
+                Toast.makeText(mContext, "Error: " + error.getMessage(), Toast.LENGTH_LONG)
+                        .show();
             }
-            return task;
-        }
-
-        public DownloadTask get(int position) {
-
-            if (position >= size()) {
-                return null;
-            }
-            return ((LinkedList<DownloadTask>) taskQueue).get(position);
-        }
-
-        public int size() {
-
-            return taskQueue.size();
-        }
-
-        @SuppressWarnings("unused")
-        public boolean remove(int position) {
-
-            return taskQueue.remove(get(position));
-        }
-
-        public boolean remove(DownloadTask task) {
-
-            return taskQueue.remove(task);
         }
     }
 
+    public interface OnDownloadingChanged {
+        void onDownloadingAdded(DownloadingItem download);
+        void onDownloadingStateChanged(DownloadingItem download);
+        void onDownloadingsStateChanged();
+        void onDownloadingDeleted(DownloadingItem download);
+        void onDownloadingProgressUpdate(DownloadingItem download, DownloadingProgressData progress);
+    }
 }

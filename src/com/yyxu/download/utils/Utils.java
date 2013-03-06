@@ -1,12 +1,20 @@
+
 package com.yyxu.download.utils;
+
+import com.yyxu.download.model.VideoItem;
 
 public class Utils {
 
-	public static String[] url = {
-			"http://img.yingyonghui.com/apk/16457/com.rovio.angrybirdsspace.ads.1332528395706.apk",
-			"http://img.yingyonghui.com/apk/15951/com.galapagossoft.trialx2_winter.1328012793227.apk",
-			"http://cdn1.down.apk.gfan.com/asdf/Pfiles/2012/3/26/181157_0502c0c3-f9d1-460b-ba1d-a3bad959b1fa.apk",
-			"http://static.nduoa.com/apk/258/258681/com.gameloft.android.GAND.GloftAsp6.asphalt6.apk",
-			"http://cdn1.down.apk.gfan.com/asdf/Pfiles/2011/12/5/100522_b73bb8d2-2c92-4399-89c7-07a9238392be.apk",
-			"http://file.m.163.com/app/free/201106/16/com.gameloft.android.TBFV.GloftGTHP.ML.apk"};
+    public static VideoItem[] videos = {
+            new VideoItem("小毛驴", "http://rs.qipaoxian.com/mp4/001.mp4",
+                    "http://www.qipaoxian.com/iso/pic/1356156732538.jpg"),
+            new VideoItem("世上只有妈妈好", "http://rs.qipaoxian.com/mp4/002.mp4",
+                    "http://www.qipaoxian.com/iso/pic/1356156805432.jpg"),
+            new VideoItem("爱我你就抱抱我", "http://rs.qipaoxian.com/mp4/003.mp4",
+                    "http://www.qipaoxian.com/iso/pic/1356156858206.jpg"),
+            new VideoItem("春天在哪里", "http://rs.qipaoxian.com/mp4/004.mp4",
+                    "http://www.qipaoxian.com/iso/pic/1356156893482.jpg"),
+            new VideoItem("种太阳", "http://rs.qipaoxian.com/mp4/055.MP4",
+                    "http://www.qipaoxian.com/iso/pic/1356147389136.jpg")
+    };
 }

@@ -26,7 +26,7 @@ public class ConfigUtils {
         ModelUtil.addOrUpdateDownloading(
                 context,
                 new DownloadingItem("default_name", task.getUrl(), "thumb", "path", (int) task
-                        .getTotalSize(), System.currentTimeMillis()));
+                        .getFileLength(), System.currentTimeMillis()));
     }
 
     public static void clearURL(Context context, String url) {

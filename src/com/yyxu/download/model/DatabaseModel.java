@@ -212,6 +212,12 @@ public class DatabaseModel {
         public static final String COMPLETED_LENGTH = "completed_length";
 
         /**
+         * The download state of downloading video.
+         * <P>Type: INTEGER</P>
+         */
+        public static final String STATE = "state";
+
+        /**
          * SQL to create a new downloading table, used when the app first opened.
          */
         public static final String SQL_CREATE_TABLE = "CREATE TABLE " + Tables.DOWNLOADING +" (" + 
@@ -222,6 +228,7 @@ public class DatabaseModel {
                 SAVE_PATH + " TEXT NOT NULL," +
                 FILE_LENGTH + " INTEGER NOT NULL DEFAULT 0," +
                 START_TIME + " INTEGER NOT NULL DEFAULT 0," + 
-                COMPLETED_LENGTH + " INTEGER NOT NULL DEFAULT 0);";
+                COMPLETED_LENGTH + " INTEGER NOT NULL DEFAULT 0," + 
+                STATE + " INTEGER NOT NULL DEFAULT 0);";
     }
 }

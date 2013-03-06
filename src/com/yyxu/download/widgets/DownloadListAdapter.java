@@ -1,132 +1,107 @@
+
 package com.yyxu.download.widgets;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.List;
 
 import android.content.Context;
-import android.content.Intent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 
 import com.yyxu.download.R;
-import com.yyxu.download.utils.MyIntents;
+import com.yyxu.download.model.DownloadingItem;
+import com.yyxu.download.services.DownloadManager;
 
 public class DownloadListAdapter extends BaseAdapter {
 
-	private Context mContext;
-	private ArrayList<HashMap<Integer, String>> dataList;
+    private Context mContext;
+    private List<DownloadingItem> mDownloads = new ArrayList<DownloadingItem>();
+    private DownloadManager mDownloadManager;
 
-	public DownloadListAdapter(Context context) {
-		mContext = context;
-		dataList = new ArrayList<HashMap<Integer, String>>();
-	}
+    public DownloadListAdapter(Context context, DownloadManager downloadManager) {
+        mContext = context;
+        mDownloadManager = downloadManager;
+        mDownloads.addAll(mDownloadManager.getAllDownloads());
+        notifyDataSetChanged();
+    }
 
-	@Override
-	public int getCount() {
-		return dataList.size();
-	}
+    @Override
+    public int getCount() {
+        return mDownloads.size();
+    }
 
-	@Override
-	public Object getItem(int position) {
-		return dataList.get(position);
-	}
+    public void addItem(DownloadingItem item) {
+        mDownloads.add(item);
+        notifyDataSetChanged();
+    }
 
-	@Override
-	public long getItemId(int position) {
-		return position;
-	}
+    public void removeItem(DownloadingItem item) {
+        mDownloads.remove(item);
+        notifyDataSetChanged();
+    }
 
-	public void addItem(String url) {
-		addItem(url, false);
-	}
+    @Override
+    public DownloadingItem getItem(int position) {
+        return mDownloads.get(position);
+    }
 
-	public void addItem(String url, boolean isPaused) {
-		HashMap<Integer, String> item = ViewHolder.getItemDataMap(url, null,
-				null, isPaused + "");
-		dataList.add(item);
-		this.notifyDataSetChanged();
-	}
+    @Override
+    public long getItemId(int position) {
+        return position;
+    }
 
-	public void removeItem(String url) {
-		String tmp;
-		for (int i = 0; i < dataList.size(); i++) {
-			tmp = dataList.get(i).get(ViewHolder.KEY_URL);
-			if (tmp.equals(url)) {
-				dataList.remove(i);
-				this.notifyDataSetChanged();
-			}
-		}
-	}
+    @Override
+    public View getView(int position, View convertView, ViewGroup parent) {
+        if (convertView == null) {
+            convertView = LayoutInflater.from(mContext).inflate(
+                    R.layout.download_list_item, null);
+        }
+        DownloadingItem item = getItem(position);
 
-	@Override
-	public View getView(int position, View convertView, ViewGroup parent) {
-		if (convertView == null) {
-			convertView = LayoutInflater.from(mContext).inflate(
-					R.layout.download_list_item, null);
-		}
+        ViewHolder viewHolder = new ViewHolder(convertView);
+        viewHolder.setData(item, null);
 
-		HashMap<Integer, String> itemData = dataList.get(position);
-		String url = itemData.get(ViewHolder.KEY_URL);
-		convertView.setTag(url);
+        viewHolder.downloadingButton.setOnClickListener(new DownloadBtnListener(item, viewHolder));
+        viewHolder.pausedButton.setOnClickListener(new DownloadBtnListener(item, viewHolder));
+        viewHolder.deleteButton.setOnClickListener(new DownloadBtnListener(item, viewHolder));
 
-		ViewHolder viewHolder = new ViewHolder(convertView);
-		viewHolder.setData(itemData);
+        return convertView;
+    }
 
-		viewHolder.continueButton.setOnClickListener(new DownloadBtnListener(
-				url, viewHolder));
-		viewHolder.pauseButton.setOnClickListener(new DownloadBtnListener(url,
-				viewHolder));
-		viewHolder.deleteButton.setOnClickListener(new DownloadBtnListener(url,
-				viewHolder));
+    private class DownloadBtnListener implements View.OnClickListener {
+        private DownloadingItem item;
+        private ViewHolder mViewHolder;
 
-		return convertView;
-	}
+        public DownloadBtnListener(DownloadingItem item, ViewHolder viewHolder) {
+            this.item = item;
+            this.mViewHolder = viewHolder;
+        }
 
-	private class DownloadBtnListener implements View.OnClickListener {
-		private String url;
-		private ViewHolder mViewHolder;
+        @Override
+        public void onClick(View v) {
+            switch (v.getId()) {
+                case R.id.btn_downloading:
+                case R.id.btn_pending:
+                    mDownloadManager.pauseDownload(item);
 
-		public DownloadBtnListener(String url, ViewHolder viewHolder) {
-			this.url = url;
-			this.mViewHolder = viewHolder;
-		}
+                    mViewHolder.downloadingButton.setVisibility(View.GONE);
+                    mViewHolder.pausedButton.setVisibility(View.VISIBLE);
+                    mViewHolder.pendingButton.setVisibility(View.GONE);
+                    break;
+                case R.id.btn_paused:
+                    mDownloadManager.resumeDownload(item);
 
-		@Override
-		public void onClick(View v) {
-			Intent downloadIntent = new Intent(
-					"com.yyxu.download.services.IDownloadService");
-
-			switch (v.getId()) {
-			case R.id.btn_continue:
-				// mDownloadManager.continueTask(mPosition);
-				downloadIntent.putExtra(MyIntents.TYPE,
-						MyIntents.Types.CONTINUE);
-				downloadIntent.putExtra(MyIntents.URL, url);
-				mContext.startService(downloadIntent);
-
-				mViewHolder.continueButton.setVisibility(View.GONE);
-				mViewHolder.pauseButton.setVisibility(View.VISIBLE);
-				break;
-			case R.id.btn_pause:
-				// mDownloadManager.pauseTask(mPosition);
-				downloadIntent.putExtra(MyIntents.TYPE, MyIntents.Types.PAUSE);
-				downloadIntent.putExtra(MyIntents.URL, url);
-				mContext.startService(downloadIntent);
-
-				mViewHolder.continueButton.setVisibility(View.VISIBLE);
-				mViewHolder.pauseButton.setVisibility(View.GONE);
-				break;
-			case R.id.btn_delete:
-				// mDownloadManager.deleteTask(mPosition);
-				downloadIntent.putExtra(MyIntents.TYPE, MyIntents.Types.DELETE);
-				downloadIntent.putExtra(MyIntents.URL, url);
-				mContext.startService(downloadIntent);
-
-				removeItem(url);
-				break;
-			}
-		}
-	}
+                    boolean downloading = item.getState() == DownloadingItem.STATE_DOWNLOADING;
+                    mViewHolder.downloadingButton.setVisibility(downloading ? View.VISIBLE : View.GONE);
+                    mViewHolder.pausedButton.setVisibility(View.GONE);
+                    mViewHolder.pendingButton.setVisibility(downloading ? View.GONE : View.VISIBLE);
+                    break;
+                case R.id.btn_delete:
+                    mDownloadManager.deleteDownload(item);
+                    break;
+            }
+        }
+    }
 }

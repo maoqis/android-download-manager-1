@@ -3,7 +3,7 @@ package com.yyxu.download.services;
 
 public interface DownloadTaskListener {
 
-    public void updateProcess(DownloadTask task);
+    public void updateProcess(DownloadTask task, DownloadingProgressData progress);
 
     public void finishDownload(DownloadTask task);
 

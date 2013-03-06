@@ -101,12 +101,9 @@ public final class AndroidHttpClient implements HttpClient {
 	 * 
 	 * @param userAgent
 	 *            to report in your HTTP requests
-	 * @param context
-	 *            to use for caching SSL sessions (may be null for no caching)
 	 * @return AndroidHttpClient for you to use for all your requests.
 	 */
-	public static AndroidHttpClient newInstance(String userAgent,
-			Context context) {
+	public static AndroidHttpClient newInstance(String userAgent) {
 		HttpParams params = new BasicHttpParams();
 
 		// Turn off stale checking. Our connections break all the time anyway,
@@ -122,18 +119,11 @@ public final class AndroidHttpClient implements HttpClient {
 		// often wants to re-POST after a redirect, which we must do ourselves.
 		HttpClientParams.setRedirecting(params, false);
 
-		// Use a session cache for SSL sockets
-		// SSLSessionCache sessionCache = context == null ? null : new
-		// SSLSessionCache(context);
-
 		// Set the specified user agent and register standard protocols.
 		HttpProtocolParams.setUserAgent(params, userAgent);
 		SchemeRegistry schemeRegistry = new SchemeRegistry();
 		schemeRegistry.register(new Scheme("http", PlainSocketFactory
 				.getSocketFactory(), 80));
-		// schemeRegistry.register(new Scheme("https",
-		// SSLCertificateSocketFactory.getHttpSocketFactory(
-		// SOCKET_OPERATION_TIMEOUT, sessionCache), 443));
 
 		ClientConnectionManager manager = new ThreadSafeClientConnManager(
 				params, schemeRegistry);
@@ -141,17 +131,6 @@ public final class AndroidHttpClient implements HttpClient {
 		// We use a factory method to modify superclass initialization
 		// parameters without the funny call-a-static-method dance.
 		return new AndroidHttpClient(manager, params);
-	}
-
-	/**
-	 * Create a new HttpClient with reasonable defaults (which you can update).
-	 * 
-	 * @param userAgent
-	 *            to report in your HTTP requests.
-	 * @return AndroidHttpClient for you to use for all your requests.
-	 */
-	public static AndroidHttpClient newInstance(String userAgent) {
-		return newInstance(userAgent, null /* session cache */);
 	}
 
 	private final HttpClient delegate;

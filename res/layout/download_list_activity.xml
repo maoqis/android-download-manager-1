@@ -25,22 +25,11 @@
             android:text="Pause All" />
 
         <Button
-            android:id="@+id/btn_delete_all"
-            android:layout_width="wrap_content"
-            android:layout_height="fill_parent"
-            android:text="关闭后台" />
-
-        <Button
             android:id="@+id/btn_add"
             android:layout_width="wrap_content"
             android:layout_height="fill_parent"
             android:text="Add" />
         
-        <Button
-            android:id="@+id/btn_traffic"
-            android:layout_width="wrap_content"
-            android:layout_height="fill_parent"
-            android:text="流量统计" />
     </LinearLayout>
 
 </LinearLayout>

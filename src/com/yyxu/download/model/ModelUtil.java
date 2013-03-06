@@ -17,6 +17,7 @@ import com.yyxu.download.model.DatabaseModel.Video;
 public class ModelUtil {
 
     private static final String WHERE_BY_URL = Video.URL + "=?";
+    private static final String WHERE_BY_STATE_OF_DOWNLOADING = Downloading.STATE + "=?";
 
     private static final String[] DOWNLOADINGS_PROJECTION = new String[] {
             Downloading._ID,
@@ -26,7 +27,8 @@ public class ModelUtil {
             Downloading.SAVE_PATH,
             Downloading.FILE_LENGTH,
             Downloading.START_TIME,
-            Downloading.COMPLETED_LENGTH
+            Downloading.COMPLETED_LENGTH,
+            Downloading.STATE
     };
 
     private static final int DOWNLOADING_INDEX_OF_NAME = 1;
@@ -36,6 +38,7 @@ public class ModelUtil {
     private static final int DOWNLOADING_INDEX_OF_FILE_LENGTH = 5;
     private static final int DOWNLOADING_INDEX_OF_START_TIME = 6;
     private static final int DOWNLOADING_INDEX_OF_COMPLETED_LENGTH = 7;
+    private static final int DOWNLOADING_INDEX_OF_STATE = 8;
 
     private static final String[] DOWNLOADEDS_PROJECTION = new String[] {
             Downloaded._ID,
@@ -93,6 +96,7 @@ public class ModelUtil {
         values.put(Downloading.FILE_LENGTH, downloading.getFileLength());
         values.put(Downloading.START_TIME, downloading.getStartTime());
         values.put(Downloading.COMPLETED_LENGTH, downloading.getCompletedLength());
+        values.put(Downloading.STATE, downloading.getState());
         Uri uri = context.getContentResolver().insert(Downloading.CONTENT_URI, values);
         return (uri != null);
     }
@@ -113,7 +117,8 @@ public class ModelUtil {
                         cursor.getString(DOWNLOADING_INDEX_OF_SAVE_PATH),
                         cursor.getInt(DOWNLOADING_INDEX_OF_FILE_LENGTH),
                         cursor.getLong(DOWNLOADING_INDEX_OF_START_TIME),
-                        cursor.getInt(DOWNLOADING_INDEX_OF_COMPLETED_LENGTH));
+                        cursor.getInt(DOWNLOADING_INDEX_OF_COMPLETED_LENGTH),
+                        cursor.getInt(DOWNLOADING_INDEX_OF_STATE));
             } finally {
                 if (!cursor.isClosed()) {
                     cursor.close();
@@ -140,7 +145,8 @@ public class ModelUtil {
                             cursor.getString(DOWNLOADING_INDEX_OF_SAVE_PATH),
                             cursor.getInt(DOWNLOADING_INDEX_OF_FILE_LENGTH),
                             cursor.getLong(DOWNLOADING_INDEX_OF_START_TIME),
-                            cursor.getInt(DOWNLOADING_INDEX_OF_COMPLETED_LENGTH)
+                            cursor.getInt(DOWNLOADING_INDEX_OF_COMPLETED_LENGTH),
+                            cursor.getInt(DOWNLOADING_INDEX_OF_STATE)
                             ));
                 }
             }
@@ -159,6 +165,28 @@ public class ModelUtil {
                 Downloading.CONTENT_URI, values, WHERE_BY_URL,
                 new String[] {
                     url
+                });
+        return (updated > 0);
+    }
+
+    public static boolean updataDownloadingState(Context context, int state, String url) {
+        ContentValues values = new ContentValues();
+        values.put(Downloading.STATE, state);
+        int updated = context.getContentResolver().update(
+                Downloading.CONTENT_URI, values, WHERE_BY_URL,
+                new String[] {
+                    url
+                });
+        return (updated > 0);
+    }
+
+    public static boolean updataAllDownloadingState(Context context, int oldState, int newState) {
+        ContentValues values = new ContentValues();
+        values.put(Downloading.STATE, newState);
+        int updated = context.getContentResolver().update(
+                Downloading.CONTENT_URI, values, WHERE_BY_STATE_OF_DOWNLOADING,
+                new String[] {
+                    String.valueOf(oldState)
                 });
         return (updated > 0);
     }
