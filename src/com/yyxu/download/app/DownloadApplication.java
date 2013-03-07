@@ -1,12 +1,14 @@
 package com.yyxu.download.app;
 
-import com.yyxu.download.services.DownloadManager;
-
 import android.app.Application;
+
+import com.yyxu.download.services.DownloadManager;
+import com.yyxu.download.services.DownloadManagerService;
+import com.yyxu.download.services.IDownloadManager;
 
 public class DownloadApplication extends Application {
 
-    private DownloadManager mDownloadManager;
+    private IDownloadManager mDownloadManager;
 
     @Override
     public void onCreate() {
@@ -17,7 +19,8 @@ public class DownloadApplication extends Application {
     public Object getSystemService(String name) {
         if (DownloadManager.DOWNLOAD_MANAGER.equals(name)) {
             if (mDownloadManager == null) {
-                mDownloadManager = new DownloadManager(this);
+                mDownloadManager = IDownloadManager.Stub.asInterface(
+                        new DownloadManagerService(this));
             }
             return mDownloadManager;
         }

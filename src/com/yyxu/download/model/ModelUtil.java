@@ -201,6 +201,24 @@ public class ModelUtil {
 
     /******* Downloaded *******/
 
+    public static boolean hasDownloaded(Context context, String url) {
+        Cursor cursor = context.getContentResolver().query(Downloaded.CONTENT_URI, null,
+                WHERE_BY_URL, new String[] {
+                    url
+                }, null);
+        boolean hasDownloaded = false;
+        if (cursor != null) {
+            try {
+                hasDownloaded = (cursor.getCount() > 0);
+            } finally {
+                if (!cursor.isClosed()) {
+                    cursor.close();
+                }
+            }
+        }
+        return hasDownloaded;
+    }
+
     public static boolean addOrUpdateDownloaded(Context context, DownloadedItem downloaded) {
         ContentResolver resolver = context.getContentResolver();
 
@@ -247,6 +265,14 @@ public class ModelUtil {
             }
         }
         return downloadeds;
+    }
+
+    public static boolean deleteDownloaded(Context context, String url) {
+        int deleted = context.getContentResolver().delete(
+                Downloaded.CONTENT_URI, WHERE_BY_URL, new String[] {
+                    url
+                });
+        return (deleted > 0);
     }
 
 }

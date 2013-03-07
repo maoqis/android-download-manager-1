@@ -12,7 +12,7 @@ public class PathUtil {
 
     private static final String VIDEOS_DIRECTORY_PATH;
 
-    private static final String TEMP_SUFFIX = ".qpx";
+    private static final String TEMP_SUFFIX = ".dat";
 
     static {
         String storageDir = Environment.getExternalStorageDirectory()
@@ -45,41 +45,53 @@ public class PathUtil {
      */
     public static String getCacheFilePath(String remotePath) {
         return getCachesDirectoryPath() + File.separator
-                + PathUtil.getLastPath(remotePath);
+                + PathUtil.getName(remotePath);
     }
 
     /**
      * Get the local video file path for the remote file.
      * 
      * @param name the name of the remote file
+     * @param remoteUrl the url of the remote file
      * @return the local video file path
      */
-    public static String getVideoFilePath(String name) {
-        return getVideosDirectoryPath() + File.separator + name;
+    public static String getVideoFilePath(String name, String remoteUrl) {
+        return getVideosDirectoryPath() + File.separator + name + getSuffix(remoteUrl);
     }
 
     /**
      * Get the local video temp file path for the remote file.
      * 
      * @param name the name of the remote file
+     * @param remoteUrl the url of the remote file
      * @return the local video temp file path
      */
-    public static String getVideoTempFilePath(String name) {
-        return getVideosDirectoryPath() + File.separator + name + TEMP_SUFFIX;
+    public static String getVideoTempFilePath(String name, String remoteUrl) {
+        return getVideoFilePath(name, remoteUrl) + TEMP_SUFFIX;
     }
 
     /**
-     * Get the last path after last '/'.
+     * Get the name of a file, including suffix.
      * 
-     * @param path the origin long path
-     * @return the last path
+     * @param path the path of the file
+     * @return the name
      */
-    private static String getLastPath(String path) {
+    public static String getName(String path) {
         int lastSeparator = path.lastIndexOf(File.separator);
         if (lastSeparator < 0) {
             return path;
         } else {
             return path.substring(lastSeparator + 1);
         }
+    }
+
+    /**
+     * Get the suffix of a file, including ".".
+     * @param pathOrName the path or name of the file
+     * @return the suffix of the file
+     */
+    public static String getSuffix(String pathOrName) {
+        int lastDotIndex = pathOrName.lastIndexOf(".");
+        return (lastDotIndex < 0) ? "" : pathOrName.substring(lastDotIndex);
     }
 }

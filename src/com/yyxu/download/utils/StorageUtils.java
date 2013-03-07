@@ -49,7 +49,6 @@ public class StorageUtils {
     }
 
     public static boolean checkAvailableStorage() {
-
         if (getAvailableStorage() < LOW_STORAGE_THRESHOLD) {
             return false;
         }

@@ -17,11 +17,11 @@ public class VideoItem implements Parcelable {
 
     public static final String KEY_THUMB_URL = "thumb_url";
 
-    private String mName;
+    protected String mName;
 
-    private String mUrl;
+    protected String mUrl;
 
-    private String mThumbUrl;
+    protected String mThumbUrl;
 
     public VideoItem(String name, String url, String thumbUrl) {
         mName = name;
@@ -103,6 +103,15 @@ public class VideoItem implements Parcelable {
     public String toString() {
         return "VideoItem[name=" + mName + " url=" + mUrl + " thumbUrl=" + mThumbUrl + "]";
     };
+
+    /**
+     * Copy a new instance form itself.
+     * 
+     * @return a new instance copied
+     */
+    public VideoItem copy() {
+        return new VideoItem(mName, mUrl, mThumbUrl);
+    }
 
     /**
      * Create a content values based on provided fields.

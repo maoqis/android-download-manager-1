@@ -1,5 +1,7 @@
 package com.yyxu.download.model;
 
+import android.os.Parcel;
+
 import com.yyxu.download.utils.PathUtil;
 
 /**
@@ -24,7 +26,7 @@ public class DownloadingItem extends BaseDownloadItem {
 
     public DownloadingItem(VideoItem video, int fileLength, long startTime) {
         this(video.getName(), video.getUrl(), video.getThumbUrl(), PathUtil.getVideoFilePath(video
-                .getName()), fileLength, startTime);
+                .getName(), video.getUrl()), fileLength, startTime);
     }
 
     public DownloadingItem(String name, String url, String thumbUrl,
@@ -38,6 +40,13 @@ public class DownloadingItem extends BaseDownloadItem {
         mStartTime = startTime;
         mCompletedLength = completedLength;
         mState = state;
+    }
+
+    public DownloadingItem(Parcel source) {
+        super(source);
+        mStartTime = source.readLong();
+        mCompletedLength = source.readInt();
+        mState = source.readInt();
     }
 
     /**
@@ -85,11 +94,38 @@ public class DownloadingItem extends BaseDownloadItem {
         mState = state;
     }
 
+
+    @Override
+    public void writeToParcel(Parcel dest, int flags) {
+        super.writeToParcel(dest, flags);
+        dest.writeLong(mStartTime);
+        dest.writeInt(mCompletedLength);
+        dest.writeInt(mState);
+    }
+
+    public static final Creator<DownloadingItem> CREATOR = new Creator<DownloadingItem>() {
+        @Override
+        public DownloadingItem createFromParcel(Parcel source) {
+            return new DownloadingItem(source);
+        }
+
+        @Override
+        public DownloadingItem[] newArray(int size) {
+            return new DownloadingItem[size];
+        }
+    };
+
+    @Override
+    public DownloadingItem copy() {
+        return new DownloadingItem(mName, mUrl, mThumbUrl, mSavePath, mFileLength, mStartTime,
+                mCompletedLength, mState);
+    }
+
     @Override
     public String toString() {
         StringBuilder builder = new StringBuilder("DownloadingItem[name=");
         builder.append(getName()).append(" url=").append(getUrl()).append(" thumbUrl=")
-                .append(getThumbUrl()).append(" savePaht=").append(getSavePath())
+                .append(getThumbUrl()).append(" savePath=").append(getSavePath())
                 .append(" fileLength=").append(getFileLength()).append(" startTime=")
                 .append(getStartTime()).append(" completedLength=").append(getCompletedLength())
                 .append(" state=").append(getState()).append("]");

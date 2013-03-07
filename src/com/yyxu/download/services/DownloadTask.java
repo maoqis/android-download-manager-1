@@ -16,14 +16,14 @@ import android.content.Context;
 import android.os.AsyncTask;
 import android.util.Log;
 
-import com.yyxu.download.error.FileAlreadyExistException;
-import com.yyxu.download.error.NoMemoryException;
+import com.yyxu.download.error.DownloadException;
 import com.yyxu.download.http.AndroidHttpClient;
 import com.yyxu.download.model.DownloadingItem;
 import com.yyxu.download.model.ModelUtil;
 import com.yyxu.download.utils.NetworkUtils;
+import com.yyxu.download.utils.PathUtil;
 
-public class DownloadTask extends AsyncTask<Void, Integer, Long> {
+class DownloadTask extends AsyncTask<Void, Integer, Long> {
 
     private static final boolean DEBUG = true;
     private static final String TAG = "DownloadTask";
@@ -31,10 +31,9 @@ public class DownloadTask extends AsyncTask<Void, Integer, Long> {
     public final static int TIME_OUT = 30000;
     private final static int BUFFER_SIZE = 1024 * 8; // 8KB
 
-    private static final String TEMP_SUFFIX = ".qpx";
-
     private Context mContext;
-    private DownloadTaskListener mDownloadListener;
+    private IDownloadClient mDownloadClient;
+    private DownloadCallbacks mDownloadCallbacks;
 
     private DownloadingItem mDownloadingItem;
     private File mFile;
@@ -48,20 +47,26 @@ public class DownloadTask extends AsyncTask<Void, Integer, Long> {
     private long mCompletePercent;
     private long mAverageSpeed;
     private long mStartTime;
-    private Throwable error = null;
+    private DownloadException error = null;
     private boolean interrupt = false;
 
     private AndroidHttpClient client;
 
-    public DownloadTask(Context context, DownloadingItem downloading, DownloadTaskListener listener) {
+    DownloadTask(Context context, IDownloadClient downloadClient, DownloadingItem downloading, DownloadCallbacks listener) {
         super();
         mContext = context;
+        mDownloadClient = downloadClient;
         mDownloadingItem = downloading;
         mCompletedLengthTillLastTime = mDownloadingItem.getCompletedLength();
         mFile = new File(downloading.getSavePath());
-        mTmpFile = new File(downloading.getSavePath() + TEMP_SUFFIX);
+        mTmpFile = new File(PathUtil.getVideoTempFilePath(downloading.getName(),
+                downloading.getUrl()));
 
-        mDownloadListener = listener;
+        mDownloadCallbacks = listener;
+    }
+
+    public IDownloadClient getDownloadClient() {
+        return mDownloadClient;
     }
 
     public DownloadingItem getDownloadingItem() {
@@ -98,17 +103,17 @@ public class DownloadTask extends AsyncTask<Void, Integer, Long> {
         return this.mAverageSpeed;
     }
 
-    public DownloadTaskListener getListener() {
+    public DownloadCallbacks getListener() {
 
-        return this.mDownloadListener;
+        return this.mDownloadCallbacks;
     }
 
     @Override
     protected void onPreExecute() {
 
         mStartTime = System.currentTimeMillis();
-        if (mDownloadListener != null)
-            mDownloadListener.preDownload(this);
+        if (mDownloadCallbacks != null)
+            mDownloadCallbacks.onPreDownload(this);
     }
 
     @Override
@@ -118,13 +123,13 @@ public class DownloadTask extends AsyncTask<Void, Integer, Long> {
         try {
             result = download();
         } catch (NetworkErrorException e) {
+            error = new DownloadException(DownloadManager.ERROR_NETWORK_ERROR);
+        } catch (DownloadException e) {
             error = e;
-        } catch (FileAlreadyExistException e) {
-            error = e;
-        } catch (NoMemoryException e) {
-            error = e;
+        } catch (FileNotFoundException e) {
+            error = new DownloadException(DownloadManager.ERROR_TEMP_FILE_LOST);
         } catch (IOException e) {
-            error = e;
+            error = new DownloadException(DownloadManager.ERROR_IO_ERROR);
         } finally {
             if (client != null) {
                 client.close();
@@ -140,8 +145,8 @@ public class DownloadTask extends AsyncTask<Void, Integer, Long> {
         if (progress.length > 1) {
             int fileLength = progress[1];
             if (fileLength < 0) {
-                if (mDownloadListener != null)
-                    mDownloadListener.errorDownload(this, error);
+                if (mDownloadCallbacks != null)
+                    mDownloadCallbacks.onDownloadError(this, error);
             }
         } else {
             mDownloadedLengthInThisTime = progress[0];
@@ -152,40 +157,35 @@ public class DownloadTask extends AsyncTask<Void, Integer, Long> {
             long costTime = System.currentTimeMillis() - mStartTime;
             mAverageSpeed = mDownloadedLengthInThisTime / costTime;
 
-            if (mDownloadListener != null)
-                mDownloadListener.updateProcess(this,
-                        new DownloadingProgressData(completedLength, mAverageSpeed));
+            if (mDownloadCallbacks != null)
+                mDownloadCallbacks.onDownloadProgressUpdate(this, completedLength, mAverageSpeed);
         }
     }
 
     @Override
     protected void onPostExecute(Long result) {
-
         if (result == -1 || interrupt || error != null) {
-            if (DEBUG && error != null) {
-                Log.v(TAG, "Download failed." + error.getMessage());
+            // Some error.
+            if (mDownloadCallbacks != null) {
+                mDownloadCallbacks.onDownloadError(this, error);
             }
-            if (mDownloadListener != null) {
-                mDownloadListener.errorDownload(this, error);
+        } else {
+            // Finish download
+            mTmpFile.renameTo(mFile);
+            if (mDownloadCallbacks != null) {
+                mDownloadCallbacks.onPostDownload(this);
             }
-            return;
         }
-        // finish download
-        mTmpFile.renameTo(mFile);
-        if (mDownloadListener != null)
-            mDownloadListener.finishDownload(this);
+
     }
 
     @Override
     public void onCancelled() {
-
         super.onCancelled();
         interrupt = true;
     }
 
-    private long download() throws NetworkErrorException, IOException, FileAlreadyExistException,
-            NoMemoryException, FileNotFoundException {
-
+    private long download() throws NetworkErrorException, IOException, DownloadException {
         // Check network.
         if (!NetworkUtils.isNetworkAvailable(mContext)) {
             throw new NetworkErrorException("Network blocked.");
@@ -207,7 +207,7 @@ public class DownloadTask extends AsyncTask<Void, Integer, Long> {
             if (DEBUG) {
                 Log.w(TAG, "File already exists, skipping download.");
             }
-            throw new FileAlreadyExistException("File already exists, skipping download.");
+            throw new DownloadException(DownloadManager.ERROR_ALREADY_DOWNLOADED);
         } else if (!mTmpFile.exists()) {
             throw new FileNotFoundException(mTmpFile.getAbsolutePath() + " Temp file not exist.");
         }

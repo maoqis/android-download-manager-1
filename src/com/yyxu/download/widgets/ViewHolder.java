@@ -8,7 +8,7 @@ import android.widget.TextView;
 
 import com.yyxu.download.R;
 import com.yyxu.download.model.DownloadingItem;
-import com.yyxu.download.services.DownloadingProgressData;
+import com.yyxu.download.services.DownloadProgressData;
 
 public class ViewHolder {
 
@@ -40,7 +40,7 @@ public class ViewHolder {
         }
     }
 
-    public void setData(DownloadingItem item, DownloadingProgressData progress) {
+    public void setData(DownloadingItem item, DownloadProgressData progress) {
         titleText.setText(item.getName());
         if (progress != null) {
             speedText.setText(String.valueOf(progress.averageSpeed));
@@ -48,6 +48,7 @@ public class ViewHolder {
             progressBar.setProgress((int) progress.completedLength);
         } else {
             speedText.setText("0/0"); // TODO
+            progressBar.setMax(item.getFileLength());
             progressBar.setProgress((int) item.getCompletedLength());
         }
 
