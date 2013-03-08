@@ -17,7 +17,7 @@ public class DownloadManager {
 
     public static final int ERROR_NO_ERROR = 0;
     public static final int ERROR_ALREADY_DOWNLOADED = 1;
-    public static final int ERROR_ALREADY_DOWNLOADING = 2;
+    public static final int ERROR_ALREADY_ADDED = 2;
     public static final int ERROR_SDCARD_NOT_FOUND = 3;
     public static final int ERROR_SDCARD_NOT_WRITABLE = 4;
     public static final int ERROR_STORAGE_NOT_ENOUGH = 5;
@@ -30,7 +30,12 @@ public class DownloadManager {
     public static final int ERROR_DOWNLOAD_PARAMS_ERROR = 12;
     public static final int ERROR_TEMP_FILE_LOST = 13;
     public static final int ERROR_IO_ERROR = 14;
-    public static final int ERROR_UNKNOWN_ERROR = 15;
+    public static final int ERROR_DUPLICATE_DOWNLOAD_REQUEST = 15;
+    public static final int ERROR_UNKNOWN_ERROR = 16;
+    public static final int ERROR_NETWORK_TIME_OUT = 17;
+    public static final int ERROR_ALREADY_RESUMED = 18;
+    public static final int ERROR_ALREADY_PAUSED = 19;
+    public static final int ERROR_DOWNLOAD_NOT_FOUND = 19;
 
     private static DownloadManager sInstance;
 
@@ -72,38 +77,42 @@ public class DownloadManager {
         } catch (RemoteException e) {
             e.printStackTrace();
         }
-        return 0;
+        return ERROR_UNKNOWN_ERROR;
     }
 
-    public void resumeDownload(IDownloadClient client, DownloadingItem item) {
+    public int resumeDownload(IDownloadClient client, DownloadingItem item) {
         try {
-            sServices.resumeDownload(client, item);
+            return sServices.resumeDownload(client, item);
         } catch (RemoteException e) {
             e.printStackTrace();
         }
+        return ERROR_UNKNOWN_ERROR;
     }
 
-    public void deleteDownload(IDownloadClient client, DownloadingItem item) {
+    public int deleteDownload(IDownloadClient client, DownloadingItem item) {
         try {
-            sServices.deleteDownload(client, item);
+            return sServices.deleteDownload(client, item);
         } catch (RemoteException e) {
             e.printStackTrace();
         }
+        return ERROR_UNKNOWN_ERROR;
     }
 
-    public void pauseDownload(IDownloadClient client, DownloadingItem item) {
+    public int pauseDownload(IDownloadClient client, DownloadingItem item) {
         try {
-            sServices.pauseDownload(client, item);
+            return sServices.pauseDownload(client, item);
         } catch (RemoteException e) {
             e.printStackTrace();
         }
+        return ERROR_UNKNOWN_ERROR;
     }
 
-    public void pauseAllDownloads(IDownloadClient client) {
+    public int pauseAllDownloads(IDownloadClient client) {
         try {
-            sServices.pauseAllDownloads(client);
+            return sServices.pauseAllDownloads(client);
         } catch (RemoteException e) {
             e.printStackTrace();
         }
+        return ERROR_UNKNOWN_ERROR;
     }
 }

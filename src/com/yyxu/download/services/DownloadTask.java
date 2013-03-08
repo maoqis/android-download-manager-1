@@ -9,11 +9,11 @@ import java.io.RandomAccessFile;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.conn.ConnectTimeoutException;
 
-import android.accounts.NetworkErrorException;
 import android.content.Context;
 import android.os.AsyncTask;
+import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
 
 import com.yyxu.download.error.DownloadException;
@@ -28,8 +28,10 @@ class DownloadTask extends AsyncTask<Void, Integer, Long> {
     private static final boolean DEBUG = true;
     private static final String TAG = "DownloadTask";
 
-    public final static int TIME_OUT = 30000;
+    public final static int TIME_OUT = 5000;
     private final static int BUFFER_SIZE = 1024 * 8; // 8KB
+
+    private Object mLock = new Object();
 
     private Context mContext;
     private IDownloadClient mDownloadClient;
@@ -39,16 +41,44 @@ class DownloadTask extends AsyncTask<Void, Integer, Long> {
     private File mFile;
     private File mTmpFile;
 
-    private RandomAccessFile mOutputStream;
-
     private long mDownloadedLengthInThisTime;
     private long mCompletedLengthTillLastTime;
 
-    private long mCompletePercent;
-    private long mAverageSpeed;
+    private long mRealTimeSpeed;
     private long mStartTime;
-    private DownloadException error = null;
-    private boolean interrupt = false;
+    private DownloadException mError;
+    private boolean mShouldBeCanceled = false;
+
+    private Handler mUpdateProgressHandler = new Handler() {
+
+        private long mLastUpdateTime = mStartTime;
+        private long mLastUpdateLength = mCompletedLengthTillLastTime;
+
+        @Override
+        public void handleMessage(Message msg) {
+            Log.i(TAG, "mUpdateProgressHandler#handleMessage: ");
+            long lengthThisTime = getDownloadedLengthInThisTime();
+            long completedLength = lengthThisTime + mCompletedLengthTillLastTime;
+            mDownloadingItem.updateCompletedLength((int) completedLength);
+            ModelUtil.updataDownloading(mContext, mDownloadingItem.getCompletedLength(),
+                    mDownloadingItem.getUrl());
+
+            long now = System.currentTimeMillis();
+            long costTime = now - mLastUpdateTime;
+            mLastUpdateTime = now;
+            long downloadLength = completedLength - mLastUpdateLength;
+            mLastUpdateLength = completedLength;
+            mRealTimeSpeed = downloadLength / costTime;
+
+            if (mDownloadCallbacks != null)
+                mDownloadCallbacks.onDownloadProgressUpdate(DownloadTask.this, completedLength,
+                        mRealTimeSpeed);
+
+            if (!mShouldBeCanceled) {
+                sendEmptyMessageDelayed(0, 1000);
+            }
+        };
+    };
 
     private AndroidHttpClient client;
 
@@ -65,7 +95,7 @@ class DownloadTask extends AsyncTask<Void, Integer, Long> {
         mDownloadCallbacks = listener;
     }
 
-    public IDownloadClient getDownloadClient() {
+    public IDownloadClient getIDownloadClient() {
         return mDownloadClient;
     }
 
@@ -74,43 +104,25 @@ class DownloadTask extends AsyncTask<Void, Integer, Long> {
     }
 
     public String getUrl() {
-
         return mDownloadingItem.getUrl();
     }
 
-    public boolean isInterrupt() {
-
-        return interrupt;
+    private long getDownloadedLengthInThisTime() {
+        long length = 0;
+        synchronized (mLock) {
+            length = mDownloadedLengthInThisTime;
+        }
+        return length;
     }
 
-    public long getDownloadPercent() {
-
-        return mCompletePercent;
-    }
-
-    public long getDownloadSize() {
-
-        return mDownloadedLengthInThisTime + mCompletedLengthTillLastTime;
-    }
-
-    public long getFileLength() {
-
-        return mDownloadingItem.getFileLength();
-    }
-
-    public long getDownloadSpeed() {
-
-        return this.mAverageSpeed;
-    }
-
-    public DownloadCallbacks getListener() {
-
-        return this.mDownloadCallbacks;
+    private void setDownloadedLengthInThisTime(long length) {
+        synchronized (mLock) {
+            mDownloadedLengthInThisTime = length;
+        }
     }
 
     @Override
     protected void onPreExecute() {
-
         mStartTime = System.currentTimeMillis();
         if (mDownloadCallbacks != null)
             mDownloadCallbacks.onPreDownload(this);
@@ -118,56 +130,29 @@ class DownloadTask extends AsyncTask<Void, Integer, Long> {
 
     @Override
     protected Long doInBackground(Void... params) {
-
         long result = -1;
         try {
             result = download();
-        } catch (NetworkErrorException e) {
-            error = new DownloadException(DownloadManager.ERROR_NETWORK_ERROR);
         } catch (DownloadException e) {
-            error = e;
+            mError = e;
         } catch (FileNotFoundException e) {
-            error = new DownloadException(DownloadManager.ERROR_TEMP_FILE_LOST);
+            mError = new DownloadException(DownloadManager.ERROR_TEMP_FILE_LOST);
         } catch (IOException e) {
-            error = new DownloadException(DownloadManager.ERROR_IO_ERROR);
+            mError = new DownloadException(DownloadManager.ERROR_IO_ERROR);
         } finally {
             if (client != null) {
                 client.close();
             }
         }
-
         return result;
     }
 
     @Override
-    protected void onProgressUpdate(Integer... progress) {
-
-        if (progress.length > 1) {
-            int fileLength = progress[1];
-            if (fileLength < 0) {
-                if (mDownloadCallbacks != null)
-                    mDownloadCallbacks.onDownloadError(this, error);
-            }
-        } else {
-            mDownloadedLengthInThisTime = progress[0];
-            long completedLength = mDownloadedLengthInThisTime + mCompletedLengthTillLastTime;
-            mDownloadingItem.updateCompletedLength((int) completedLength);
-            mCompletePercent = (completedLength) * 100 / mDownloadingItem.getFileLength();
-
-            long costTime = System.currentTimeMillis() - mStartTime;
-            mAverageSpeed = mDownloadedLengthInThisTime / costTime;
-
-            if (mDownloadCallbacks != null)
-                mDownloadCallbacks.onDownloadProgressUpdate(this, completedLength, mAverageSpeed);
-        }
-    }
-
-    @Override
     protected void onPostExecute(Long result) {
-        if (result == -1 || interrupt || error != null) {
+        if (result < 0 || mShouldBeCanceled || mError != null) {
             // Some error.
             if (mDownloadCallbacks != null) {
-                mDownloadCallbacks.onDownloadError(this, error);
+                mDownloadCallbacks.onDownloadError(this, mError);
             }
         } else {
             // Finish download
@@ -182,139 +167,99 @@ class DownloadTask extends AsyncTask<Void, Integer, Long> {
     @Override
     public void onCancelled() {
         super.onCancelled();
-        interrupt = true;
+        mShouldBeCanceled = true;
     }
 
-    private long download() throws NetworkErrorException, IOException, DownloadException {
+    private long download() throws IOException, DownloadException, FileNotFoundException {
         // Check network.
         if (!NetworkUtils.isNetworkAvailable(mContext)) {
-            throw new NetworkErrorException("Network blocked.");
+            throw new DownloadException(DownloadManager.ERROR_NETWORK_NOT_AVAILABLE);
         }
 
         // Check file length;
         client = AndroidHttpClient.newInstance("QiPaoXianClient");
-        HttpGet httpGet = new HttpGet(mDownloadingItem.getUrl());
-        HttpResponse response = client.execute(httpGet);
-        long remoteFileLength = response.getEntity().getContentLength();
-        client.close();
-        if (mDownloadingItem.getFileLength() != remoteFileLength) {
-            Log.w(TAG, "Remote file has change length!");
-            return -1;
-        }
 
         // Check file exist.
-        if (mFile.exists() && remoteFileLength == mFile.length()) {
+        if (mFile.exists()) {
             if (DEBUG) {
                 Log.w(TAG, "File already exists, skipping download.");
             }
             throw new DownloadException(DownloadManager.ERROR_ALREADY_DOWNLOADED);
         } else if (!mTmpFile.exists()) {
-            throw new FileNotFoundException(mTmpFile.getAbsolutePath() + " Temp file not exist.");
+            throw new DownloadException(DownloadManager.ERROR_TEMP_FILE_LOST);
         }
 
         client = AndroidHttpClient.newInstance("QiPaoXianClient");
-        httpGet.addHeader("Range", "bytes=" + mDownloadingItem.getCompletedLength() + "-");
-        response = client.execute(httpGet);
+        HttpGet httpGet = new HttpGet(mDownloadingItem.getUrl());
+        httpGet.addHeader("Range", "bytes=" + mDownloadingItem.getCompletedLength() + "-" + (mDownloadingItem.getFileLength() - 1));
+        HttpResponse response = client.execute(httpGet);
 
         // Start download.
-        mOutputStream = new ProgressReportingRandomAccessFile(mTmpFile, "rw");
+        RandomAccessFile outputFile = new RandomAccessFile(mTmpFile, "rw");
 
-        publishProgress(0, (int) remoteFileLength);
+        mUpdateProgressHandler.sendEmptyMessage(0);
 
         InputStream input = response.getEntity().getContent();
-        int bytesCopied = copy(input, mOutputStream);
+        int bytesCopied = copy(input, outputFile);
 
-        if ((mCompletedLengthTillLastTime + bytesCopied) != mDownloadingItem.getFileLength()
-                && !interrupt) {
-            throw new IOException("Download incomplete: " + bytesCopied + " != "
-                    + mDownloadingItem.getFileLength());
+        if (!mShouldBeCanceled
+                && (mCompletedLengthTillLastTime + bytesCopied) != mDownloadingItem.getFileLength()) {
+            throw new DownloadException(DownloadManager.ERROR_UNKNOWN_ERROR);
         }
 
         if (DEBUG) {
-            Log.v(TAG, "Download completed successfully.");
+            Log.v(TAG, "Download completed successfully: " + mDownloadingItem);
         }
 
         return bytesCopied;
 
     }
 
-    public int copy(InputStream input, RandomAccessFile out) throws IOException,
-            NetworkErrorException {
-
-        if (input == null || out == null) {
+    private int copy(InputStream input, RandomAccessFile output) throws IOException, DownloadException {
+        if (input == null || output == null) {
             return -1;
         }
 
         byte[] buffer = new byte[BUFFER_SIZE];
-
         BufferedInputStream in = new BufferedInputStream(input, BUFFER_SIZE);
-        if (DEBUG) {
-            Log.v(TAG, "length" + out.length());
-        }
 
-        int count = 0, n = 0;
-        long errorBlockTimePreviousTime = -1, expireTime = 0;
+        int copyedAll = 0, copyed = 0;
+        setDownloadedLengthInThisTime(copyedAll);
+        long previousTime = System.currentTimeMillis(), nowTime, costTime;
 
         try {
-
-            out.seek(mDownloadingItem.getCompletedLength());
-
-            while (!interrupt) {
-                n = in.read(buffer, 0, BUFFER_SIZE);
-                if (n == -1) {
+            output.seek(mDownloadingItem.getCompletedLength());
+            while (!mShouldBeCanceled) {
+                copyed = in.read(buffer, 0, BUFFER_SIZE);
+                if (copyed < 0) {
                     break;
                 }
-                out.write(buffer, 0, n);
+                output.write(buffer, 0, copyed);
                 ModelUtil.updataDownloading(mContext, mDownloadingItem.getCompletedLength(), mDownloadingItem.getUrl());
-                count += n;
+                copyedAll += copyed;
+                setDownloadedLengthInThisTime(copyedAll);
 
-                /*
-                 * check network
-                 */
+                // Check network.
                 if (!NetworkUtils.isNetworkAvailable(mContext)) {
-                    throw new NetworkErrorException("Network blocked.");
+                    throw new DownloadException(DownloadManager.ERROR_NETWORK_NOT_AVAILABLE);
                 }
 
-                if (mAverageSpeed == 0) {
-                    if (errorBlockTimePreviousTime > 0) {
-                        expireTime = System.currentTimeMillis() - errorBlockTimePreviousTime;
-                        if (expireTime > TIME_OUT) {
-                            throw new ConnectTimeoutException("connection time out.");
-                        }
-                    } else {
-                        errorBlockTimePreviousTime = System.currentTimeMillis();
-                    }
-                } else {
-                    expireTime = 0;
-                    errorBlockTimePreviousTime = -1;
+                // Check timeout.
+                nowTime = System.currentTimeMillis();
+                costTime = nowTime - previousTime;
+                previousTime = nowTime;
+                if (costTime > TIME_OUT) {
+                    throw new DownloadException(DownloadManager.ERROR_NETWORK_TIME_OUT);
                 }
             }
         } finally {
             client.close(); // must close client first
             client = null;
-            out.close();
+            output.close();
             in.close();
             input.close();
         }
-        return count;
-
+        return copyedAll;
     }
 
-    private final class ProgressReportingRandomAccessFile extends RandomAccessFile {
-        private int mWritedBytes = 0;
-
-        public ProgressReportingRandomAccessFile(File file, String mode)
-                throws FileNotFoundException {
-
-            super(file, mode);
-        }
-
-        @Override
-        public void write(byte[] buffer, int offset, int count) throws IOException {
-
-            super.write(buffer, offset, count);
-            mWritedBytes += count;
-            publishProgress(mWritedBytes);
-        }
-    }
 }

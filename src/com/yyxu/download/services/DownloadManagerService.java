@@ -35,9 +35,8 @@ public class DownloadManagerService extends IDownloadManager.Stub implements Dow
 
     private List<DownloadTask> mDownloadingTasks;
 
-    private List<DownloadedItem> mAllDownloadeds;
+    private List<String> mPendingRequest;
 
-    private List<DownloadingItem> mAllItems;
     private List<DownloadingItem> mDownloadingItems;
     private List<DownloadingItem> mPausedItems;
     private List<DownloadingItem> mPendingItems;
@@ -46,19 +45,15 @@ public class DownloadManagerService extends IDownloadManager.Stub implements Dow
         super();
         mContext = context;
 
-        mAllDownloadeds = new ArrayList<DownloadedItem>();
+        mPendingRequest = new ArrayList<String>();
 
-        mAllItems = new ArrayList<DownloadingItem>();
         mDownloadingItems = new ArrayList<DownloadingItem>();
         mPausedItems = new ArrayList<DownloadingItem>();
         mPendingItems = new ArrayList<DownloadingItem>();
 
-        // Load all downloadeds here.
-        mAllDownloadeds = ModelUtil.loadDownloadeds(mContext, Downloaded.FINISH_TIME, true);
-
         // Load all downloadings here.
-        mAllItems = ModelUtil.loadDownloadings(mContext, Downloading.START_TIME, true);
-        for (DownloadingItem item : mAllItems) {
+        List<DownloadingItem> allDownloadingItems = ModelUtil.loadDownloadings(mContext, Downloading.START_TIME, true);
+        for (DownloadingItem item : allDownloadingItems) {
             switch (item.getState()) {
                 case DownloadingItem.STATE_DOWNLOADING:
                     mDownloadingItems.add(item);
@@ -77,12 +72,12 @@ public class DownloadManagerService extends IDownloadManager.Stub implements Dow
 
     @Override
     public List<DownloadingItem> getAllDownloadings() {
-        return mAllItems;
+        return ModelUtil.loadDownloadings(mContext, Downloading.START_TIME, true);
     }
 
     @Override
     public List<DownloadedItem> getAllDownloadeds() {
-        return mAllDownloadeds;
+        return ModelUtil.loadDownloadeds(mContext, Downloaded.FINISH_TIME, true);
     }
 
     @Override
@@ -91,21 +86,29 @@ public class DownloadManagerService extends IDownloadManager.Stub implements Dow
             Log.i(TAG, "addDownload: " + video);
         }
 
+        final String url = video.getUrl();
+
+        for (String requestUrl : mPendingRequest) {
+            if (requestUrl.equals(url)) {
+                return DownloadManager.ERROR_DUPLICATE_DOWNLOAD_REQUEST;
+            }
+        }
+
         if (!NetworkUtils.isNetworkAvailable(mContext)) {
             return DownloadManager.ERROR_NETWORK_NOT_AVAILABLE;
         }
 
         // Check if is downloaded and file still exists.
-        if (ModelUtil.hasDownloaded(mContext, video.getUrl())) {
-            if (new File(PathUtil.getVideoFilePath(video.getName(), video.getUrl())).exists()) {
+        if (ModelUtil.hasDownloaded(mContext, url)) {
+            if (new File(PathUtil.getVideoFilePath(video.getName(), url)).exists()) {
                 return DownloadManager.ERROR_ALREADY_DOWNLOADED;
             } else {
-                ModelUtil.deleteDownloaded(mContext, video.getUrl());
+                ModelUtil.deleteDownloaded(mContext, url);
             }
         }
 
-        if (ModelUtil.hasDownloading(mContext, video.getUrl())) {
-            return DownloadManager.ERROR_ALREADY_DOWNLOADING;
+        if (ModelUtil.hasDownloading(mContext, url)) {
+            return DownloadManager.ERROR_ALREADY_ADDED;
         }
 
         if (!StorageUtils.isSDCardPresent()) {
@@ -118,7 +121,7 @@ public class DownloadManagerService extends IDownloadManager.Stub implements Dow
             return DownloadManager.ERROR_SDCARD_NOT_WRITABLE;
         }
 
-        if (mAllItems.size() >= MAX_DOWNLOAD) {
+        if (ModelUtil.getDownloadingsCount(mContext) >= MAX_DOWNLOAD) {
             Toast.makeText(mContext, "已达最大下载数", Toast.LENGTH_LONG).show();
             return DownloadManager.ERROR_DOWNLOADING_LIST_FULL;
         }
@@ -127,8 +130,10 @@ public class DownloadManagerService extends IDownloadManager.Stub implements Dow
             
             @Override
             public void onError(DownloadException exception) {
+                // TODO better way to show error?
                 Toast.makeText(mContext, exception.errorString(),
                         Toast.LENGTH_SHORT).show();
+                mPendingRequest.remove(url);
             }
 
             @Override
@@ -143,7 +148,6 @@ public class DownloadManagerService extends IDownloadManager.Stub implements Dow
 
                 // Add to DB.
                 ModelUtil.addOrUpdateDownloading(mContext, result);
-                mAllItems.add(result);
 
                 if (state == DownloadingItem.STATE_DOWNLOADING) {
                     // Start a download task.
@@ -154,6 +158,8 @@ public class DownloadManagerService extends IDownloadManager.Stub implements Dow
                 } else { // Pending.
                     mPendingItems.add(result);
                 }
+
+                mPendingRequest.remove(url);
 
                 try {
                     client.onDownloadingAdded(result.copy());
@@ -166,117 +172,103 @@ public class DownloadManagerService extends IDownloadManager.Stub implements Dow
     }
 
     @Override
-    public synchronized void pauseDownload(IDownloadClient client, DownloadingItem item) {
+    public int pauseDownload(IDownloadClient client, DownloadingItem item) {
         if (DEBUG) {
             Log.i(TAG, "pauseDownload: " + item);
         }
 
-        // Can only pause downloading or pending download.
-        if ((item.getState() & (DownloadingItem.STATE_DOWNLOADING | DownloadingItem.STATE_PENDING)) == 0) {
-            throw new IllegalStateException(
-                    "Can not resume a download that is neither in downloading state nor in pending state. "
-                            + item);
-        }
-
-        // Cancel task if downloading, and remove from old.
-        if (item.getState() == DownloadingItem.STATE_DOWNLOADING) {
-            DownloadTask task = findDownloadTask(item.getUrl());
-            if (task != null) {
-                task.onCancelled();
-                mDownloadingTasks.remove(task);
-            }
-            mDownloadingItems.remove(item);
-        } else { // Pending.
-            mPendingItems.remove(item);
-        }
-
-        // Update state and add to new.
-        item.updateState(DownloadingItem.STATE_PAUSED);
-        mPausedItems.add(item);
-        ModelUtil.updataDownloadingState(mContext, DownloadingItem.STATE_PAUSED, item.getUrl());
-
-        try {
-            client.onDownloadingStateChanged(item.copy());
-        } catch (RemoteException e) {
-            e.printStackTrace();
-        }
+        return pauseDownloadInner(client, item);
     }
 
     @Override
-    public synchronized void resumeDownload(IDownloadClient client, DownloadingItem item) {
+    public int resumeDownload(IDownloadClient client, DownloadingItem item) {
         if (DEBUG) {
             Log.i(TAG, "resumeDownload: " + item);
         }
 
+        String url = item.getUrl();
+
         // Can only resume paused download.
-        if (item.getState() != DownloadingItem.STATE_PAUSED) {
-            throw new IllegalStateException(
-                    "Can not resume a download that is not in paused state. " + item);
+        DownloadingItem itemInServer = findInPaused(url);
+        if (itemInServer == null) {
+            return DownloadManager.ERROR_ALREADY_RESUMED;
         }
 
-        mPausedItems.remove(item);
+        ensureDownloadTaskRemoved(url);
+        removeFrom(url, mPausedItems);
+
         if (mDownloadingItems.size() < MAX_DOWNLOADING) {
-            item.updateState(DownloadingItem.STATE_DOWNLOADING);
-            mDownloadingItems.add(item);
-            ModelUtil.updataDownloadingState(mContext, DownloadingItem.STATE_DOWNLOADING, item.getUrl());
+            itemInServer.updateState(DownloadingItem.STATE_DOWNLOADING);
+            mDownloadingItems.add(itemInServer);
+            ModelUtil.updataDownloadingState(mContext, DownloadingItem.STATE_DOWNLOADING, url);
 
             // Start a download task.
-            DownloadTask task = createDownloadTask(client, item);
+            DownloadTask task = createDownloadTask(client, itemInServer);
             mDownloadingTasks.add(task);
             task.execute((Void)null);
         } else { // Pending.
-            item.updateState(DownloadingItem.STATE_PENDING);
-            mPendingItems.add(item);
-            ModelUtil.updataDownloadingState(mContext, DownloadingItem.STATE_PENDING, item.getUrl());
+            itemInServer.updateState(DownloadingItem.STATE_PENDING);
+            mPendingItems.add(itemInServer);
+            ModelUtil.updataDownloadingState(mContext, DownloadingItem.STATE_PENDING, url);
         }
 
         try {
-            client.onDownloadingStateChanged(item.copy());
+            client.onDownloadingStateChanged(itemInServer.copy());
         } catch (RemoteException e) {
             e.printStackTrace();
         }
+
+        return DownloadManager.ERROR_NO_ERROR;
     }
 
     @Override
-    public synchronized void deleteDownload(IDownloadClient client, DownloadingItem item) {
+    public int deleteDownload(IDownloadClient client, DownloadingItem item) {
         if (DEBUG) {
             Log.i(TAG, "deleteDownload: " + item);
         }
 
-        // Cancel task if downloading, and remove.
-        if (item.getState() == DownloadingItem.STATE_DOWNLOADING) {
-            DownloadTask task = findDownloadTask(item.getUrl());
-            if (task != null) {
-                task.onCancelled();
-                mDownloadingTasks.remove(task);
+        String url = item.getUrl();
+
+        DownloadingItem itemInServer = findInDownloading(url);
+        if (itemInServer == null) {
+            itemInServer = findInPaused(url);
+            if (itemInServer == null) {
+                itemInServer = findInPending(url);
+                if (itemInServer == null) {
+                    return DownloadManager.ERROR_DOWNLOAD_NOT_FOUND;
+                }
             }
-            mDownloadingItems.remove(item);
-        } else if (item.getState() == DownloadingItem.STATE_PAUSED) {
-            mPausedItems.remove(item);
-        } else { // Pending.
-            mPendingItems.remove(item);
         }
 
-        // Delete file.
-        // TODO Is too fast that task not canceled yet.
-        File file = new File(item.getSavePath());
+        if (itemInServer.getState() == DownloadingItem.STATE_DOWNLOADING) {
+            ensureDownloadTaskRemoved(url);
+            removeFrom(url, mDownloadingItems);
+        } else if (itemInServer.getState() == DownloadingItem.STATE_PAUSED) {
+            removeFrom(url, mPausedItems);
+        } else { // Pending.
+            removeFrom(url, mPendingItems);
+        }
+
+        // Delete temp file.
+        File file = new File(PathUtil.getVideoTempFilePath(itemInServer.getName(), url));
         if (file.exists()) {
             file.delete();
         }
 
         // Totally remove this download.
-        mAllItems.remove(item);
-        ModelUtil.deleteDownloading(mContext, item.getUrl());
+        ModelUtil.deleteDownloading(mContext, url);
 
         try {
-            client.onDownloadingDeleted(item.copy());
+            client.onDownloadingDeleted(itemInServer.copy());
         } catch (RemoteException e) {
             e.printStackTrace();
         }
+
+        return DownloadManager.ERROR_NO_ERROR;
     }
 
     @Override
-    public synchronized void pauseAllDownloads(IDownloadClient client) {
+    public int pauseAllDownloads(IDownloadClient client) {
         if (DEBUG) {
             Log.i(TAG, "pauseAllDownloads.");
         }
@@ -314,35 +306,79 @@ public class DownloadManagerService extends IDownloadManager.Stub implements Dow
         } catch (RemoteException e) {
             e.printStackTrace();
         }
+
+        return DownloadManager.ERROR_NO_ERROR;
     }
 
-    private void onFinishDownload(DownloadTask task) {
-        DownloadingItem item = task.getDownloadingItem();
-
-        if (DEBUG) {
-            Log.i(TAG, "onFinishDownload: " + item);
+    private int pauseDownloadInner(IDownloadClient client, DownloadingItem item) {
+        String url = item.getUrl();
+        DownloadingItem itemInServer = findInDownloading(url);
+        if (itemInServer == null) {
+            itemInServer = findInPending(url);
+        }
+        if (itemInServer == null) {
+            // Can only pause downloading or pending download.
+            return DownloadManager.ERROR_ALREADY_PAUSED;
         }
 
-        // Remove task from list.
-        mDownloadingTasks.remove(task);
+        // Cancel task if downloading, and remove from old.
+        if (itemInServer.getState() == DownloadingItem.STATE_DOWNLOADING) {
+            ensureDownloadTaskRemoved(url);
+            removeFrom(url, mDownloadingItems);
+        } else { // Pending.
+            removeFrom(url, mPendingItems);
+        }
 
-        // Remove download totally.
-        mDownloadingItems.remove(item);
-        mAllItems.remove(item);
-        ModelUtil.deleteDownloading(mContext, item.getUrl());
+        // Update state and add to new.
+        itemInServer.updateState(DownloadingItem.STATE_PAUSED);
+        mPausedItems.add(itemInServer);
+        ModelUtil.updataDownloadingState(mContext, DownloadingItem.STATE_PAUSED, url);
 
         try {
-            task.getDownloadClient().onDownloadingDeleted(item);
+            client.onDownloadingStateChanged(itemInServer.copy());
         } catch (RemoteException e) {
             e.printStackTrace();
         }
 
-        // Add to DB as downloaded.
-        ModelUtil.addOrUpdateDownloaded(
-                mContext,
-                new DownloadedItem(item.getName(), item.getUrl(), item.getThumbUrl(), item
-                        .getSavePath(), (int) item.getFileLength(), System.currentTimeMillis()));
+        return DownloadManager.ERROR_NO_ERROR;
+    }
 
+    private DownloadingItem findInDownloading(String url) {
+        return findInList(url, mDownloadingItems);
+    }
+
+    private DownloadingItem findInPaused(String url) {
+        return findInList(url, mPausedItems);
+    }
+
+    private DownloadingItem findInPending(String url) {
+        return findInList(url, mPendingItems);
+    }
+
+    private DownloadingItem findInList(String url, List<DownloadingItem> items) {
+        for (DownloadingItem item : items) {
+            if (item.getUrl().equals(url)) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    private void removeFrom(String url, List<DownloadingItem> from) {
+        for (DownloadingItem item : from) {
+            if (item.getUrl().equals(url)) {
+                from.remove(item);
+                return;
+            }
+        }
+    }
+
+    private void ensureDownloadTaskRemoved(String url) {
+        DownloadTask oldTask = findDownloadTask(url);
+        if (oldTask != null) {
+            oldTask.onCancelled();
+            mDownloadingTasks.remove(oldTask);
+        }
     }
 
     private DownloadTask findDownloadTask(String url) {
@@ -367,7 +403,7 @@ public class DownloadManagerService extends IDownloadManager.Stub implements Dow
     @Override
     public void onDownloadProgressUpdate(DownloadTask task, long completedLength, long averageSpeed) {
         try {
-            task.getDownloadClient().onDownloadingProgressUpdate(task.getDownloadingItem(),
+            task.getIDownloadClient().onDownloadingProgressUpdate(task.getDownloadingItem(),
                     new DownloadProgressData(completedLength, averageSpeed));
         } catch (RemoteException e) {
             e.printStackTrace();
@@ -380,13 +416,39 @@ public class DownloadManagerService extends IDownloadManager.Stub implements Dow
 
     @Override
     public void onPostDownload(DownloadTask task) {
-        onFinishDownload(task);
+        DownloadingItem item = task.getDownloadingItem();
+
+        if (DEBUG) {
+            Log.i(TAG, "onFinishDownload: " + item);
+        }
+
+        // Remove task from list.
+        mDownloadingTasks.remove(task);
+
+        // Remove download totally.
+        removeFrom(item.getUrl(), mDownloadingItems);
+        ModelUtil.deleteDownloading(mContext, item.getUrl());
+
+        try {
+            task.getIDownloadClient().onDownloadingDeleted(item);
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
+
+        // Add to DB as downloaded.
+        ModelUtil.addOrUpdateDownloaded(
+                mContext,
+                new DownloadedItem(item.getName(), item.getUrl(), item.getThumbUrl(), item
+                        .getSavePath(), (int) item.getFileLength(), System.currentTimeMillis()));
     }
 
     @Override
     public void onDownloadError(DownloadTask task, DownloadException error) {
+        pauseDownloadInner(task.getIDownloadClient(), task.getDownloadingItem());
+
         if (error != null) {
-            Toast.makeText(mContext, "Error: " + error.getMessage(), Toast.LENGTH_LONG)
+            // Handle errors.
+            Toast.makeText(mContext, "Error: " + error.errorString(), Toast.LENGTH_LONG)
                     .show();
         }
     }

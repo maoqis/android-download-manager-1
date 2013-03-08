@@ -13,7 +13,7 @@ public abstract class DownloadClient {
 
     public abstract void onDownloadingStateChanged(DownloadingItem download);
 
-    public abstract void onDownloadingsStateChanged(List<DownloadingItem> download);
+    public abstract void onDownloadingsStateChanged(List<DownloadingItem> downloads);
 
     public abstract void onDownloadingDeleted(DownloadingItem download);
 
@@ -37,8 +37,8 @@ public abstract class DownloadClient {
         }
 
         @Override
-        public void onDownloadingsStateChanged(List<DownloadingItem> download) {
-            DownloadClient.this.onDownloadingsStateChanged(download);
+        public void onDownloadingsStateChanged(List<DownloadingItem> downloads) {
+            DownloadClient.this.onDownloadingsStateChanged(downloads);
         }
 
         @Override

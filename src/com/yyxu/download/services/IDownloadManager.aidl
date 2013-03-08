@@ -12,8 +12,8 @@ interface IDownloadManager {
     List<DownloadedItem> getAllDownloadeds();
 
     int addDownload(in IDownloadClient client, in VideoItem video);
-    void resumeDownload(IDownloadClient client, in DownloadingItem item);
-    void deleteDownload(IDownloadClient client, in DownloadingItem item);
-    void pauseDownload(IDownloadClient client, in DownloadingItem item);
-    void pauseAllDownloads(IDownloadClient client);
+    int resumeDownload(IDownloadClient client, in DownloadingItem item);
+    int deleteDownload(IDownloadClient client, in DownloadingItem item);
+    int pauseDownload(IDownloadClient client, in DownloadingItem item);
+    int pauseAllDownloads(IDownloadClient client);
 }

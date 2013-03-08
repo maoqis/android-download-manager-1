@@ -43,7 +43,9 @@ public class ViewHolder {
     public void setData(DownloadingItem item, DownloadProgressData progress) {
         titleText.setText(item.getName());
         if (progress != null) {
-            speedText.setText(String.valueOf(progress.averageSpeed));
+            speedText.setText(String.valueOf(progress.averageSpeed) + "KB/s "
+                    + String.valueOf(progress.completedLength) + "/"
+                    + String.valueOf(item.getFileLength()));
             progressBar.setMax(item.getFileLength());
             progressBar.setProgress((int) progress.completedLength);
         } else {

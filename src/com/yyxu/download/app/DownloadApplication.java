@@ -1,6 +1,7 @@
 package com.yyxu.download.app;
 
 import android.app.Application;
+import android.os.IBinder;
 
 import com.yyxu.download.services.DownloadManager;
 import com.yyxu.download.services.DownloadManagerService;
@@ -8,7 +9,7 @@ import com.yyxu.download.services.IDownloadManager;
 
 public class DownloadApplication extends Application {
 
-    private IDownloadManager mDownloadManager;
+    private IBinder mDownloadManagerService;
 
     @Override
     public void onCreate() {
@@ -18,11 +19,10 @@ public class DownloadApplication extends Application {
     @Override
     public Object getSystemService(String name) {
         if (DownloadManager.DOWNLOAD_MANAGER.equals(name)) {
-            if (mDownloadManager == null) {
-                mDownloadManager = IDownloadManager.Stub.asInterface(
-                        new DownloadManagerService(this));
+            if (mDownloadManagerService == null) {
+                mDownloadManagerService = new DownloadManagerService(this);
             }
-            return mDownloadManager;
+            return IDownloadManager.Stub.asInterface(mDownloadManagerService);
         }
         return super.getSystemService(name);
     }

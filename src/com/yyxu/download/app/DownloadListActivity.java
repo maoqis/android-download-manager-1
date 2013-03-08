@@ -5,7 +5,6 @@ import java.util.List;
 
 import android.app.Activity;
 import android.os.Bundle;
-import android.os.RemoteException;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -18,7 +17,6 @@ import com.yyxu.download.model.VideoItem;
 import com.yyxu.download.services.DownloadClient;
 import com.yyxu.download.services.DownloadManager;
 import com.yyxu.download.services.DownloadProgressData;
-import com.yyxu.download.services.IDownloadClient;
 import com.yyxu.download.utils.StorageUtils;
 import com.yyxu.download.utils.Utils;
 import com.yyxu.download.widgets.DownloadListAdapter;
@@ -46,8 +44,8 @@ public class DownloadListActivity extends Activity {
 
         setContentView(R.layout.download_list_activity);
 
-        mDownloadManager = (DownloadManager) getApplicationContext().getSystemService(
-                DownloadManager.DOWNLOAD_MANAGER);
+        mDownloadManager = DownloadManager.getDefault(this);
+        mDownloadClient = new DefaultDownloadClient();
 
         if (!StorageUtils.isSDCardPresent()) {
             Toast.makeText(this, "未发现SD卡", Toast.LENGTH_LONG).show();
@@ -74,18 +72,23 @@ public class DownloadListActivity extends Activity {
                 if (urlIndex >= Utils.videos.length) {
                     urlIndex = 0;
                 }
-                mDownloadManager.addDownload(mDownloadClient.getIDownloadClient(), video);
+                int result = mDownloadManager.addDownload(mDownloadClient.getIDownloadClient(), video);
+                if (result != DownloadManager.ERROR_NO_ERROR) {
+                    Toast.makeText(DownloadListActivity.this, "Error happened: " + result, Toast.LENGTH_LONG).show();
+                }
             }
         });
 
         mPauseAllButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                mDownloadManager.pauseAllDownloads(mDownloadClient.getIDownloadClient());
+                int result = mDownloadManager.pauseAllDownloads(mDownloadClient.getIDownloadClient());
+                if (result != DownloadManager.ERROR_NO_ERROR) {
+                    Toast.makeText(DownloadListActivity.this, "Error happened: " + result, Toast.LENGTH_LONG).show();
+                }
             }
         });
 
-        mDownloadClient = new DefaultDownloadClient();
     }
 
     @Override
@@ -100,32 +103,38 @@ public class DownloadListActivity extends Activity {
         public void onDownloadingAdded(DownloadingItem download) {
             Log.i(TAG, "onDownloadingAdded(): " + download);
             mAdapter.addItem(download);
+            mAdapter.notifyDataSetChanged();
         }
 
         @Override
         public void onDownloadingStateChanged(DownloadingItem download) {
             Log.i(TAG, "onDownloadingStateChanged(): " + download);
+            mAdapter.updateItemState(download.getUrl(), download.getState());
             mAdapter.notifyDataSetChanged();
         }
 
         @Override
-        public void onDownloadingsStateChanged(List<DownloadingItem> download)
+        public void onDownloadingsStateChanged(List<DownloadingItem> downloads)
                 {
             Log.i(TAG, "onDownloadingsStateChanged()");
+            for (DownloadingItem item : downloads) {
+                mAdapter.updateItemState(item.getUrl(), item.getState());
+            }
             mAdapter.notifyDataSetChanged();
         }
 
         @Override
         public void onDownloadingDeleted(DownloadingItem download) {
             Log.i(TAG, "onDownloadingDeleted(): " + download);
-            mAdapter.removeItem(download);
+            mAdapter.removeItem(download.getUrl());
+            mAdapter.notifyDataSetChanged();
         }
 
         @Override
         public void onDownloadingProgressUpdate(DownloadingItem download,
                 DownloadProgressData progress) {
             Log.i(TAG, "onDownloadingProgressUpdate(): " + download);
-            mAdapter.updateProgress(download, progress);
+            mAdapter.updateProgress(download.getUrl(), progress);
             mAdapter.notifyDataSetChanged();
         }
         

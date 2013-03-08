@@ -158,6 +158,21 @@ public class ModelUtil {
         return downloadings;
     }
 
+    public static int getDownloadingsCount(Context context) {
+        Cursor cursor = context.getContentResolver().query(Downloading.CONTENT_URI, null, null, null, null);
+        int count = 0;
+        if (cursor != null) {
+            try {
+                count = cursor.getCount();
+            } finally {
+                if (!cursor.isClosed()) {
+                    cursor.close();
+                }
+            }
+        }
+        return count;
+    }
+
     public static boolean updataDownloading(Context context, int compeletedLength, String url) {
         ContentValues values = new ContentValues();
         values.put(Downloading.COMPLETED_LENGTH, compeletedLength);
